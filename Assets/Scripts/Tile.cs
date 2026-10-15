@@ -1,7 +1,7 @@
 using UnityEngine;
-using UnityEngine.EventSystems; // Nepieciešams, lai strādātu klikšķu sistēma
+using UnityEngine.EventSystems;
 
-// Pievienojam IPointerClickHandler saskarni
+// Lauciņa skripts
 public class Tile : MonoBehaviour, IPointerClickHandler
 {
     public int x;
@@ -11,8 +11,10 @@ public class Tile : MonoBehaviour, IPointerClickHandler
     public bool isFinishTile = false;
     public bool hasItem = false;
 
-    [HideInInspector] public bool isRevealed = false; 
-    private SpriteRenderer spriteRenderer; 
+    [HideInInspector]
+    public bool isRevealed = false;
+
+    private SpriteRenderer spriteRenderer;
 
     private void Awake()
     {
@@ -21,37 +23,111 @@ public class Tile : MonoBehaviour, IPointerClickHandler
 
     private void Start()
     {
-        if (spriteRenderer != null)
-        {
-            if (isFinishTile)
-                spriteRenderer.color = Color.green; 
-            else if (hasItem)
-                spriteRenderer.color = Color.yellow; 
-            else
-                spriteRenderer.color = Color.white; 
-        }
+        RefreshColor();
     }
 
     public void RevealTile()
     {
+        // Parādām aktivizēto slazdu
         isRevealed = true;
-        if (spriteRenderer != null && isBadTile)
+
+        if (spriteRenderer != null)
         {
-            spriteRenderer.color = Color.red; 
+            spriteRenderer.color = Color.red;
         }
+    }
+
+    public void SetBadTileHidden()
+    {
+        // Izveidojam paslēptu slazdu
+        isBadTile = true;
+        isRevealed = false;
+
+        RefreshColor();
+    }
+
+    public void HideBadTile()
+    {
+        // Noņemam veco slazdu
+        isBadTile = false;
+        isRevealed = false;
+
+        RefreshColor();
     }
 
     public void CollectItem()
     {
+        // Noņemam savākto priekšmetu
         hasItem = false;
-        if (spriteRenderer != null && !isFinishTile)
+
+        RefreshColor();
+    }
+
+    public void ShowItem()
+    {
+        if (spriteRenderer == null)
         {
-            spriteRenderer.color = Color.white; 
+            return;
+        }
+
+        // Finish nekad nedrīkst kļūt dzeltens
+        if (isFinishTile)
+        {
+            spriteRenderer.color = Color.green;
+            return;
+        }
+
+        if (hasItem)
+        {
+            spriteRenderer.color = Color.yellow;
+        }
+    }
+
+    public void HideItem()
+    {
+        RefreshColor();
+    }
+
+    private void RefreshColor()
+    {
+        if (spriteRenderer == null)
+        {
+            return;
+        }
+
+        // Finish vienmēr ir zaļš
+        if (isFinishTile)
+        {
+            spriteRenderer.color = Color.green;
+        }
+        // Priekšmets ir dzeltens
+        else if (hasItem)
+        {
+            spriteRenderer.color = Color.yellow;
+        }
+        // Tikai aktivizēts slazds ir redzams sarkans
+        else if (isBadTile && isRevealed)
+        {
+            spriteRenderer.color = Color.red;
+        }
+        // Paslēptie slazdi izskatās kā parasti balti lauciņi
+        else
+        {
+            spriteRenderer.color = Color.white;
         }
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
+        if (GameManager.Instance == null)
+        {
+            Debug.LogError(
+                "GameManager nav atrasts!"
+            );
+
+            return;
+        }
+
         GameManager.Instance.TryMoveToTile(this);
     }
 }
