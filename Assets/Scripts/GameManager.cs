@@ -1,25 +1,36 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance;
 
+    [Header("Players")]
     public Transform player1;
     public Transform player2;
 
     public Tile player1Tile;
     public Tile player2Tile;
 
-    // Finish lauciņš
     public Tile finishTile;
 
+    [Header("UI")]
     public TMP_Text diceText;
     public TMP_Text turnText;
     public TMP_Text scoreP1Text;
     public TMP_Text scoreP2Text;
     public TMP_Text winText;
+
+    [Header("Dice Animation")]
+    public Image diceImage;
+    public Button rollButton;
+
+    public Sprite[] diceFaces = new Sprite[6];
+
+    [Min(0.1f)]
+    public float diceAnimationDuration = 1.5f;
 
     private int currentPlayer = 1;
     private int remainingMoves = 0;
@@ -28,23 +39,17 @@ public class GameManager : MonoBehaviour
     private int itemsP2 = 0;
 
     private bool hasRolled = false;
+    private bool isRolling = false;
     private bool gameOver = false;
 
-    // Visi spēles lauciņi
     private Tile[] allTiles;
 
-    // Sākuma lauciņus saglabājam atsevišķi,
-    // lai uz tiem nekad neparādītos priekšmeti vai slazdi
     private Tile player1StartTile;
     private Tile player2StartTile;
 
-    // Attālums starp lauciņiem
     private float gridOffset = 1f;
 
-    // Vienlaikus uz laukuma būs 6 priekšmeti
     private int activeItemsCount = 6;
-
-    // Vienlaikus uz laukuma būs 2 paslēpti slazdi
     private int activeBadTilesCount = 2;
 
     private void Awake()
@@ -54,10 +59,29 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
-        // Paslēpjam uzvaras tekstu spēles sākumā
+        // Paslēpjam uzvaras tekstu
         if (winText != null)
         {
             winText.text = "";
+        }
+
+        // Aktivizējam kauliņa pogu
+        if (rollButton != null)
+        {
+            rollButton.interactable = true;
+        }
+
+        // Sākumā parādām kauliņa pirmo pusi
+        if (diceImage != null &&
+            diceFaces != null &&
+            diceFaces.Length > 0 &&
+            diceFaces[0] != null)
+        {
+            diceImage.sprite = diceFaces[0];
+            diceImage.color = Color.white;
+
+            diceImage.rectTransform.localRotation =
+                Quaternion.identity;
         }
 
         // Atrodam visus spēles lauciņus
@@ -69,14 +93,13 @@ public class GameManager : MonoBehaviour
         player1StartTile = player1Tile;
         player2StartTile = player2Tile;
 
-        // Ja Finish ir piešķirts Inspector, atzīmējam to kā Finish
+        // Atrodam Finish lauciņu
         if (finishTile != null)
         {
             finishTile.isFinishTile = true;
         }
         else
         {
-            // Ja Finish nav piešķirts, mēģinām to atrast automātiski
             foreach (Tile tile in allTiles)
             {
                 if (tile.isFinishTile)
@@ -87,11 +110,13 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // Automātiski aprēķinām attālumu starp lauciņiem
+        // Aprēķinām attālumu starp lauciņiem
         if (allTiles.Length > 1)
         {
             float minDistance = float.MaxValue;
-            Vector3 firstPos = allTiles[0].transform.position;
+
+            Vector3 firstPos =
+                allTiles[0].transform.position;
 
             for (int i = 1; i < allTiles.Length; i++)
             {
@@ -100,21 +125,20 @@ public class GameManager : MonoBehaviour
                     allTiles[i].transform.position
                 );
 
-                if (distance > 0.1f && distance < minDistance)
+                if (distance > 0.1f &&
+                    distance < minDistance)
                 {
                     minDistance = distance;
                 }
             }
 
-            gridOffset = minDistance;
-
-            Debug.Log(
-                "Automātiski noteiktais attālums starp laukiem: "
-                + gridOffset
-            );
+            if (minDistance < float.MaxValue)
+            {
+                gridOffset = minDistance;
+            }
         }
 
-        // Piešķiram katram lauciņam režģa koordinātas
+        // Piešķiram koordinātas
         foreach (Tile tile in allTiles)
         {
             tile.x = Mathf.RoundToInt(
@@ -126,52 +150,176 @@ public class GameManager : MonoBehaviour
             );
         }
 
-        // Novietojam pirmo spēlētāju uz sākuma lauciņa
+        // Novietojam spēlētājus
         if (player1 != null && player1Tile != null)
         {
-            player1.position = player1Tile.transform.position;
+            player1.position =
+                player1Tile.transform.position;
         }
 
-        // Novietojam otro spēlētāju uz sākuma lauciņa
         if (player2 != null && player2Tile != null)
         {
-            player2.position = player2Tile.transform.position;
+            player2.position =
+                player2Tile.transform.position;
         }
 
-        // Vispirms izveidojam 2 paslēptus slazdus
+        // Izveidojam slazdus un priekšmetus
         GenerateRandomBadTiles();
-
-        // Pēc tam izveidojam 6 priekšmetus
         GenerateRandomItems();
 
         UpdateUI();
+        if (diceText != null)
+        {
+            diceText.text = "Roll the dice!";
+        }
     }
 
+    // KAULIŅA MEŠANA
     public void RollDice()
     {
-        // Neļaujam mest kauliņu atkārtoti viena gājiena laikā
-        if (hasRolled || gameOver)
+        // Neļaujam atkārtotu metienu
+        if (hasRolled || isRolling || gameOver)
         {
             return;
         }
 
-        remainingMoves = Random.Range(1, 7);
-
         hasRolled = true;
-    diceText.text =
-            "Moves left: " + remainingMoves;
+        isRolling = true;
+
+        remainingMoves = 0;
+
+        // Bloķējam pogu animācijas laikā
+        if (rollButton != null)
+        {
+            rollButton.interactable = false;
+        }
+
+        if (diceText != null)
+        {
+            diceText.text = "Rolling...";
+        }
+
+        StartCoroutine(AnimateDiceRoll());
     }
 
+    // KAULIŅA ANIMĀCIJA
+    private IEnumerator AnimateDiceRoll()
+    {
+        // Izvēlamies nejaušu rezultātu
+        int result = Random.Range(1, 7);
+
+        bool canAnimate =
+            diceImage != null &&
+            diceFaces != null &&
+            diceFaces.Length >= 6;
+
+        // Pārbaudām visas kauliņa puses
+        if (canAnimate)
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                if (diceFaces[i] == null)
+                {
+                    canAnimate = false;
+                    break;
+                }
+            }
+        }
+
+        if (canAnimate)
+        {
+            float elapsed = 0f;
+            float nextFaceTime = 0f;
+
+            // Animācija ilgst 1.5 sekundes
+            while (elapsed < diceAnimationDuration)
+            {
+                elapsed += Time.deltaTime;
+
+                float progress = Mathf.Clamp01(
+                    elapsed / diceAnimationDuration
+                );
+
+                // Pakāpeniski samazinām rotācijas ātrumu
+                float rotationSpeed = Mathf.Lerp(
+                    1100f,
+                    100f,
+                    progress
+                );
+
+                diceImage.rectTransform.Rotate(
+                    0f,
+                    0f,
+                    -rotationSpeed * Time.deltaTime
+                );
+
+                // Ātri mainām kauliņa puses
+                if (elapsed >= nextFaceTime)
+                {
+                    int randomFace = Random.Range(0, 6);
+
+                    diceImage.sprite =
+                        diceFaces[randomFace];
+
+                    // Animācija pakāpeniski palēninās
+                    float faceInterval = Mathf.Lerp(
+                        0.06f,
+                        0.24f,
+                        progress * progress
+                    );
+
+                    nextFaceTime =
+                        elapsed + faceInterval;
+                }
+
+                yield return null;
+            }
+
+            // Parādām īsto rezultātu
+            diceImage.sprite = diceFaces[result - 1];
+
+            // Atgriežam sākotnējo rotāciju
+            diceImage.rectTransform.localRotation =
+                Quaternion.identity;
+        }
+        else
+        {
+            Debug.LogWarning(
+                "Dice Animation: piešķir Dice Image un visas 6 Dice Faces!"
+            );
+        }
+
+        // Piešķiram spēlētājam gājienus
+        remainingMoves = result;
+
+        isRolling = false;
+
+        if (diceText != null)
+        {
+            diceText.text =
+                "Moves left: " + remainingMoves;
+        }
+
+        Debug.Log("Kauliņš: " + result);
+    }
+
+    // SPĒLĒTĀJA PĀRVIETOŠANĀS
     public void TryMoveToTile(Tile targetTile)
     {
-        // Pārvietoties drīkst tikai pēc kauliņa mešanas
-        if (!hasRolled || remainingMoves <= 0 || gameOver)
+        // Animācijas laikā pārvietoties nedrīkst
+        if (targetTile == null ||
+            !hasRolled ||
+            isRolling ||
+            remainingMoves <= 0 ||
+            gameOver)
         {
             return;
         }
 
         Tile currentTile =
-            currentPlayer == 1 ? player1Tile : player2Tile;
+            currentPlayer == 1
+                ? player1Tile
+                : player2Tile;
 
         if (currentTile == null)
         {
@@ -182,13 +330,11 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // Aprēķinām attālumu līdz izvēlētajam lauciņam
+        // Pārbaudām attālumu
         int distance =
             Mathf.Abs(targetTile.x - currentTile.x) +
             Mathf.Abs(targetTile.y - currentTile.y);
-
-        // Drīkst pārvietoties tikai uz blakus esošu lauciņu
-        if (distance != 1)
+            if (distance != 1)
         {
             Debug.LogWarning(
                 "Izvēlētais lauciņš nav blakus."
@@ -200,21 +346,28 @@ public class GameManager : MonoBehaviour
         // Pārvietojam aktīvo spēlētāju
         if (currentPlayer == 1)
         {
-            player1.position = targetTile.transform.position;
+            player1.position =
+                targetTile.transform.position;
+
             player1Tile = targetTile;
         }
         else
         {
-            player2.position = targetTile.transform.position;
+            player2.position =
+                targetTile.transform.position;
+
             player2Tile = targetTile;
         }
 
         remainingMoves--;
 
-        diceText.text =
-            "Moves left: " + remainingMoves;
+        if (diceText != null)
+        {
+            diceText.text =
+                "Moves left: " + remainingMoves;
+        }
 
-        // Pārbaudām jaunā lauciņa efektu
+        // Pārbaudām lauciņa efektu
         EvaluateTileEffect(targetTile);
 
         if (gameOver)
@@ -222,22 +375,21 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // Kad visi soļi izmantoti, mainām spēlētāju
+        // Mainām spēlētāju
         if (remainingMoves == 0)
         {
             EndTurn();
         }
     }
 
+    // LAUCIŅA EFEKTI
     private void EvaluateTileEffect(Tile tile)
     {
-        // Pārbaudām, vai spēlētājs uzkāpa uz paslēpta slazda
+        // Slazds
         if (tile.isBadTile && !tile.isRevealed)
         {
-            // Parādām sarkano lauciņu
             tile.RevealTile();
 
-            // Atņemam 2 punktus
             if (currentPlayer == 1)
             {
                 itemsP1 = Mathf.Max(
@@ -253,21 +405,16 @@ public class GameManager : MonoBehaviour
                 );
             }
 
-            Debug.Log(
-                "Slazds! -2 punkti."
-            );
+            Debug.Log("Slazds! -2 punkti.");
 
-            // Vecais slazds vairs nav aktīvs
             tile.isBadTile = false;
 
-            // Pēc īsa brīža paslēpjam sarkano krāsu
-            // un izveidojam jaunu slazdu citā vietā
             StartCoroutine(
                 ReplaceBadTile(tile)
             );
         }
 
-        // Pārbaudām, vai uz lauciņa ir priekšmets
+        // Priekšmets
         if (tile.hasItem)
         {
             if (currentPlayer == 1)
@@ -285,11 +432,10 @@ public class GameManager : MonoBehaviour
                 "Priekšmets savākts! +1 punkts."
             );
 
-            // Izveidojam jaunu priekšmetu citā vietā
             SpawnNewItem();
         }
 
-        // Pārbaudām Finish
+        // Finish
         if (tile == finishTile || tile.isFinishTile)
         {
             if (currentPlayer == 1 && itemsP1 >= 10)
@@ -323,11 +469,17 @@ public class GameManager : MonoBehaviour
             }
         }
 
+        if (gameOver && rollButton != null)
+        {
+            rollButton.interactable = false;
+        }
+
         UpdateUI();
     }
+
+    // PRIEKŠMETU ĢENERĒŠANA
     private void GenerateRandomItems()
     {
-        // Noņemam visus iepriekš iestatītos priekšmetus
         foreach (Tile tile in allTiles)
         {
             tile.hasItem = false;
@@ -361,11 +513,11 @@ public class GameManager : MonoBehaviour
         }
 
         Debug.Log(
-            "Izveidoti priekšmeti: "
-            + spawnedItems
+            "Izveidoti priekšmeti: " + spawnedItems
         );
     }
 
+    // JAUNS PRIEKŠMETS
     private void SpawnNewItem()
     {
         int attempts = 0;
@@ -378,8 +530,7 @@ public class GameManager : MonoBehaviour
                 allTiles[
                     Random.Range(0, allTiles.Length)
                 ];
-
-            if (!CanSpawnItem(randomTile))
+                if (!CanSpawnItem(randomTile))
             {
                 continue;
             }
@@ -388,47 +539,38 @@ public class GameManager : MonoBehaviour
             randomTile.ShowItem();
 
             Debug.Log(
-                "Jauns priekšmets: "
-                + randomTile.name
+                "Jauns priekšmets: " + randomTile.name
             );
 
             return;
         }
     }
 
+    // PĀRBAUDĀM PRIEKŠMETA VIETU
     private bool CanSpawnItem(Tile tile)
     {
-        // Priekšmets nedrīkst būt uz Finish
         if (tile == finishTile || tile.isFinishTile)
         {
             return false;
         }
 
-        // Priekšmets nedrīkst būt uz sākuma lauciņiem
-        if (
-            tile == player1StartTile ||
-            tile == player2StartTile
-        )
+        if (tile == player1StartTile ||
+            tile == player2StartTile)
         {
             return false;
         }
 
-        // Priekšmets nedrīkst parādīties zem spēlētāja
-        if (
-            tile == player1Tile ||
-            tile == player2Tile
-        )
+        if (tile == player1Tile ||
+            tile == player2Tile)
         {
             return false;
         }
 
-        // Priekšmets nedrīkst būt uz slazda
         if (tile.isBadTile || tile.isRevealed)
         {
             return false;
         }
 
-        // Uz viena lauciņa nevar būt divi priekšmeti
         if (tile.hasItem)
         {
             return false;
@@ -437,9 +579,9 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
+    // SLAZDU ĢENERĒŠANA
     private void GenerateRandomBadTiles()
     {
-        // Noņemam vecos slazdus
         foreach (Tile tile in allTiles)
         {
             tile.HideBadTile();
@@ -448,7 +590,6 @@ public class GameManager : MonoBehaviour
         int spawnedBadTiles = 0;
         int attempts = 0;
 
-        // Izveidojam tieši 2 paslēptus slazdus
         while (
             spawnedBadTiles < activeBadTilesCount &&
             attempts < 500
@@ -472,11 +613,11 @@ public class GameManager : MonoBehaviour
         }
 
         Debug.Log(
-            "Izveidoti slazdi: "
-            + spawnedBadTiles
+            "Izveidoti slazdi: " + spawnedBadTiles
         );
     }
 
+    // JAUNS SLAZDS
     private void SpawnNewBadTile()
     {
         int attempts = 0;
@@ -498,8 +639,7 @@ public class GameManager : MonoBehaviour
             randomTile.SetBadTileHidden();
 
             Debug.Log(
-                "Jauns paslēpts slazds: "
-                + randomTile.name
+                "Jauns paslēpts slazds: " + randomTile.name
             );
 
             return;
@@ -510,38 +650,31 @@ public class GameManager : MonoBehaviour
         );
     }
 
+    // PĀRBAUDĀM SLAZDA VIETU
     private bool CanSpawnBadTile(Tile tile)
     {
-        // Slazds nedrīkst būt uz Finish
         if (tile == finishTile || tile.isFinishTile)
         {
             return false;
         }
-        // Slazds nedrīkst būt uz sākuma lauciņiem
-        if (
-            tile == player1StartTile ||
-            tile == player2StartTile
-        )
+
+        if (tile == player1StartTile ||
+            tile == player2StartTile)
         {
             return false;
         }
 
-        // Slazds nedrīkst parādīties zem spēlētāja
-        if (
-            tile == player1Tile ||
-            tile == player2Tile
-        )
+        if (tile == player1Tile ||
+            tile == player2Tile)
         {
             return false;
         }
 
-        // Slazds nedrīkst būt uz priekšmeta
         if (tile.hasItem)
         {
             return false;
         }
 
-        // Uz viena lauciņa nevar būt divi slazdi
         if (tile.isBadTile || tile.isRevealed)
         {
             return false;
@@ -550,44 +683,59 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
+    // PĀRVIETOJAM SLAZDU
     private IEnumerator ReplaceBadTile(Tile oldTile)
     {
-        // Īsu brīdi parādām sarkano lauciņu
         yield return new WaitForSeconds(0.6f);
 
-        // Vecais slazds kļūst par parastu lauciņu
         oldTile.HideBadTile();
 
-        // Ja spēle vēl turpinās, izveidojam jaunu slazdu
         if (!gameOver)
         {
             SpawnNewBadTile();
         }
     }
 
+    // GĀJIENA BEIGAS
     private void EndTurn()
     {
-        // Mainām aktīvo spēlētāju
         currentPlayer =
             currentPlayer == 1 ? 2 : 1;
 
         hasRolled = false;
 
-        diceText.text =
-            "Roll the dice!";
+        if (diceText != null)
+        {
+            diceText.text = "Roll the dice!";
+        }
+
+        if (rollButton != null)
+        {
+            rollButton.interactable = true;
+        }
 
         UpdateUI();
     }
 
+    // ATJAUNOJAM INTERFEISU
     private void UpdateUI()
     {
-        turnText.text =
-            "Turn: Player " + currentPlayer;
+        if (turnText != null)
+        {
+            turnText.text =
+                "Turn: Player " + currentPlayer;
+        }
 
-        scoreP1Text.text =
-            "P1: " + itemsP1 + "/10";
+        if (scoreP1Text != null)
+        {
+            scoreP1Text.text =
+                "P1: " + itemsP1 + "/10";
+        }
 
-        scoreP2Text.text =
-            "P2: " + itemsP2 + "/10";
+        if (scoreP2Text != null)
+        {
+            scoreP2Text.text =
+                "P2: " + itemsP2 + "/10";
+        }
     }
 }
