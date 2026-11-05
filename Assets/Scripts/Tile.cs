@@ -1,24 +1,49 @@
+
 using UnityEngine;
 using UnityEngine.EventSystems;
+using TMPro;
 
-// Lauciņa skripts
+public enum BonusType
+{
+    Points,
+    Wall,
+    Freeze
+}
+
 public class Tile : MonoBehaviour, IPointerClickHandler
 {
+    [Header("Tile Coordinates")]
     public int x;
     public int y;
 
+    [Header("Tile Types")]
     public bool isBadTile = false;
     public bool isFinishTile = false;
     public bool hasItem = false;
 
-    [HideInInspector]
-    public bool isRevealed = false;
+    [Header("Tile Indicator")]
+    public TMP_Text tileIndicatorText;
+
+    [Header("Tile Colours")]
+    public Color normalColor = Color.white;
+    public Color pointsColor = Color.yellow;
+    public Color wallBonusColor = new Color(0.1f, 0.65f, 1f);
+    public Color freezeBonusColor = new Color(0.65f, 0.25f, 1f);
+    public Color wallColor = Color.gray;
+    public Color trapColor = Color.red;
+    public Color finishColor = Color.green;
+
+    [HideInInspector] public bool isRevealed = false;
+    [HideInInspector] public bool isWall = false;
+    [HideInInspector] public int wallTurnsRemaining = 0;
+    [HideInInspector] public BonusType bonusType = BonusType.Points;
 
     private SpriteRenderer spriteRenderer;
 
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
+        RefreshColor();
     }
 
     private void Start()
@@ -28,59 +53,34 @@ public class Tile : MonoBehaviour, IPointerClickHandler
 
     public void RevealTile()
     {
-        // Parādām aktivizēto slazdu
         isRevealed = true;
-
-        if (spriteRenderer != null)
-        {
-            spriteRenderer.color = Color.red;
-        }
+        RefreshColor();
     }
 
     public void SetBadTileHidden()
     {
-        // Izveidojam paslēptu slazdu
         isBadTile = true;
         isRevealed = false;
-
         RefreshColor();
     }
 
     public void HideBadTile()
     {
-        // Noņemam veco slazdu
         isBadTile = false;
         isRevealed = false;
-
         RefreshColor();
     }
 
     public void CollectItem()
     {
-        // Noņemam savākto priekšmetu
         hasItem = false;
-
+        bonusType = BonusType.Points;
         RefreshColor();
     }
 
     public void ShowItem()
     {
-        if (spriteRenderer == null)
-        {
-            return;
-        }
-
-        // Finish nekad nedrīkst kļūt dzeltens
-        if (isFinishTile)
-        {
-            spriteRenderer.color = Color.green;
-            return;
-        }
-
-        if (hasItem)
-        {
-            spriteRenderer.color = Color.yellow;
-        }
+        RefreshColor();
     }
 
     public void HideItem()
@@ -88,46 +88,79 @@ public class Tile : MonoBehaviour, IPointerClickHandler
         RefreshColor();
     }
 
+    public void PlaceWall(int turns)
+    {
+        isWall = true;
+        wallTurnsRemaining = turns;
+        RefreshColor();
+    }
+
+    public void RemoveWall()
+    {
+        isWall = false;
+        wallTurnsRemaining = 0;
+        RefreshColor();
+    }
+
     private void RefreshColor()
     {
         if (spriteRenderer == null)
-        {
             return;
-        }
 
-        // Finish vienmēr ir zaļš
-        if (isFinishTile)
+        string indicator = "";
+        Color tileColor = normalColor;
+
+        if (isWall)
         {
-            spriteRenderer.color = Color.green;
+            tileColor = wallColor;
+            indicator = "BLOCKED";
         }
-        // Priekšmets ir dzeltens
+        else if (isFinishTile)
+        {
+            tileColor = finishColor;
+        }
         else if (hasItem)
         {
-            spriteRenderer.color = Color.yellow;
+            switch (bonusType)
+            {
+                case BonusType.Points:
+                    tileColor = pointsColor;
+                    indicator = "+1";
+                    break;
+
+                case BonusType.Wall:
+                    tileColor = wallBonusColor;
+                    indicator = "WALL";
+                    break;
+
+                case BonusType.Freeze:
+                    tileColor = freezeBonusColor;
+                    indicator = "FREEZE";
+                    break;
+            }
         }
-        // Tikai aktivizēts slazds ir redzams sarkans
         else if (isBadTile && isRevealed)
         {
-            spriteRenderer.color = Color.red;
+            tileColor = trapColor;
+            indicator = "TRAP";
         }
-        // Paslēptie slazdi izskatās kā parasti balti lauciņi
-        else
+
+        spriteRenderer.color = tileColor;
+
+        if (tileIndicatorText != null)
         {
-            spriteRenderer.color = Color.white;
+            bool showIndicator = !string.IsNullOrEmpty(indicator);
+
+            tileIndicatorText.gameObject.SetActive(showIndicator);
+
+            if (showIndicator)
+                tileIndicatorText.text = indicator;
         }
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (GameManager.Instance == null)
-        {
-            Debug.LogError(
-                "GameManager nav atrasts!"
-            );
-
-            return;
-        }
-
-        GameManager.Instance.TryMoveToTile(this);
+        if (GameManager.Instance != null)
+            GameManager.Instance.OnTileClicked(this);
     }
 }
