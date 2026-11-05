@@ -4095,6 +4095,8 @@ MonoBehaviour:
   scoreP1Text: {fileID: 40403189}
   scoreP2Text: {fileID: 178884223}
   winText: {fileID: 138871350}
+  player1InventoryText: {fileID: 0}
+  player2InventoryText: {fileID: 0}
   diceImage: {fileID: 1541138680}
   rollButton: {fileID: 1541138679}
   diceFaces:
@@ -4105,10 +4107,10 @@ MonoBehaviour:
   - {fileID: -9223130493960747880, guid: 56bdc2a727954ca41a9777363cfdf6fd, type: 3}
   - {fileID: -7465713121816197856, guid: 429badb32254a374e99f4b43f0369845, type: 3}
   diceAnimationDuration: 1.5
-  wallButton: {fileID: 0}
+  wallButton: {fileID: 85257175}
   wallCountText: {fileID: 0}
   wallDurationInTurns: 2
-  freezeButton: {fileID: 0}
+  freezeButton: {fileID: 916066429}
   freezeCountText: {fileID: 0}
   frozenTurnMessageDuration: 2
   startingPointBonuses: 4
