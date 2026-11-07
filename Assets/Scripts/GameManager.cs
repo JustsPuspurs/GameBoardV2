@@ -21,6 +21,20 @@ public class GameManager : MonoBehaviour
     [Header("UI")]
     public TMP_Text diceText;
     public TMP_Text turnText;
+    [Header("Turn Panel")]
+    public Image turnPanelImage;
+    [Header("Turn Panel Animation")]
+    public Color player1PanelColor = new Color(0.05f, 0.12f, 0.3f, 0.85f);
+    public Color player2PanelColor = new Color(0.05f, 0.25f, 0.12f, 0.85f);
+
+    [Min(0.05f)]
+    public float panelTransitionDuration = 0.4f;
+
+    private Coroutine panelColorCoroutine;
+    private int lastPanelPlayer = -1;
+    [Header("Turn Indicator Colors")]
+    public Color player1TurnColor = new Color(0.2f, 0.6f, 1f);
+    public Color player2TurnColor = new Color(0.2f, 0.85f, 0.3f);
     public TMP_Text scoreP1Text;
     public TMP_Text scoreP2Text;
     public TMP_Text winText;
@@ -94,6 +108,11 @@ public class GameManager : MonoBehaviour
     private float gridOffset = 1f;
 
     private int activeBadTilesCount = 2;
+    [Header("Player Movement Animation")]
+    [Min(0.05f)]
+    public float moveDuration = 0.3f;
+
+    private bool isAnimatingMove = false;
 
     private void Awake()
     {
@@ -352,6 +371,9 @@ public class GameManager : MonoBehaviour
             diceText.text = "Moves left: " + remainingMoves;
         }
 
+// Show available movement tiles
+        RefreshMoveHighlights();
+
         Debug.Log("Dice result: " + result);
     }
 
@@ -360,105 +382,171 @@ public class GameManager : MonoBehaviour
     // =====================================================
 
     public void TryMoveToTile(Tile targetTile)
+{
+    if (targetTile == null ||
+        !hasRolled ||
+        isRolling ||
+        isAnimatingMove ||
+        remainingMoves <= 0 ||
+        gameOver ||
+        isResolvingFrozenTurn)
     {
-        if (targetTile == null ||
-            !hasRolled ||
-            isRolling ||
-            remainingMoves <= 0 ||
-            gameOver ||
-            isResolvingFrozenTurn)
-        {
-            return;
-        }
-
-        Tile currentTile =
-            currentPlayer == 1 ? player1Tile : player2Tile;
-
-        if (currentTile == null)
-        {
-            Debug.LogError("Player tile is not assigned!");
-            return;
-        }
-
-        // Check whether target is adjacent
-        int distance =
-            Mathf.Abs(targetTile.x - currentTile.x) +
-            Mathf.Abs(targetTile.y - currentTile.y);
-
-        if (distance != 1)
-        {
-            Debug.LogWarning("Selected tile is not adjacent.");
-            return;
-        }
-
-        // Walls block movement
-        if (targetTile.isWall)
-        {
-            if (diceText != null)
-            {
-                diceText.text = "BLOCKED! Wall is in the way.";
-            }
-
-            Debug.Log("Movement blocked by wall.");
-            return;
-        }
-
-        // Players cannot occupy the same tile
-        if (currentPlayer == 1 && targetTile == player2Tile)
-        {
-            Debug.Log("Player 2 is occupying this tile.");
-            return;
-        }
-
-        if (currentPlayer == 2 && targetTile == player1Tile)
-        {
-            Debug.Log("Player 1 is occupying this tile.");
-            return;
-        }
-
-        // Move active player
-        if (currentPlayer == 1)
-        {
-            if (player1 != null)
-            {
-                player1.position = targetTile.transform.position;
-            }
-
-            player1Tile = targetTile;
-        }
-        else
-        {
-            if (player2 != null)
-            {
-                player2.position = targetTile.transform.position;
-            }
-
-            player2Tile = targetTile;
-        }
-
-        remainingMoves--;
-
-        if (diceText != null)
-        {
-            diceText.text = "Moves left: " + remainingMoves;
-        }
-
-        EvaluateTileEffect(targetTile);
-
-        if (gameOver)
-        {
-            return;
-        }
-
-        if (remainingMoves == 0)
-        {
-            EndTurn();
-        }
+        return;
     }
 
-    // =====================================================
-    // TILE EFFECTS
-    // =====================================================
+    Tile currentTile =
+        currentPlayer == 1 ? player1Tile : player2Tile;
+
+    if (currentTile == null)
+    {
+        Debug.LogError("Player tile is not assigned!");
+        return;
+    }
+
+    // Check adjacency
+    int distance =
+        Mathf.Abs(targetTile.x - currentTile.x) +
+        Mathf.Abs(targetTile.y - currentTile.y);
+
+    if (distance != 1)
+    {
+        Debug.LogWarning("Selected tile is not adjacent.");
+        return;
+    }
+
+    // Check walls
+    if (targetTile.isWall)
+    {
+        if (diceText != null)
+        {
+            diceText.text = "BLOCKED! Wall is in the way.";
+        }
+
+        return;
+    }
+
+    // Check occupied tiles
+    if (currentPlayer == 1 && targetTile == player2Tile)
+    {
+        return;
+    }
+
+    if (currentPlayer == 2 && targetTile == player1Tile)
+    {
+        return;
+    }
+
+    Transform activePlayer =
+        currentPlayer == 1 ? player1 : player2;
+
+    if (activePlayer == null)
+    {
+        Debug.LogError("Active player is not assigned!");
+        return;
+    }
+
+    // Start smooth movement
+    isAnimatingMove = true;
+
+    StartCoroutine(SmoothMovePlayer(
+        activePlayer,
+        targetTile,
+        currentPlayer
+    ));
+}
+
+// =====================================================
+// SMOOTH PLAYER MOVEMENT
+// =====================================================
+
+private IEnumerator SmoothMovePlayer(
+    Transform movingPlayer,
+    Tile targetTile,
+    int movingPlayerNumber)
+{
+    if (movingPlayer == null || targetTile == null)
+    {
+        isAnimatingMove = false;
+        RefreshMoveHighlights();
+        yield break;
+    }
+
+    Vector3 startPosition = movingPlayer.position;
+    Vector3 targetPosition = targetTile.transform.position;
+
+    float elapsed = 0f;
+    float duration = Mathf.Max(0.05f, moveDuration);
+
+    // Smooth movement animation
+    while (elapsed < duration)
+    {
+        if (movingPlayer == null || targetTile == null)
+        {
+            isAnimatingMove = false;
+            RefreshMoveHighlights();
+            yield break;
+        }
+
+        elapsed += Time.deltaTime;
+
+        float t = Mathf.Clamp01(elapsed / duration);
+
+        // Smooth acceleration and deceleration
+        t = t * t * (3f - 2f * t);
+
+        movingPlayer.position =
+            Vector3.Lerp(startPosition, targetPosition, t);
+
+        yield return null;
+    }
+
+    if (movingPlayer == null || targetTile == null)
+    {
+        isAnimatingMove = false;
+        RefreshMoveHighlights();
+        yield break;
+    }
+
+    // Ensure exact final position
+    movingPlayer.position = targetPosition;
+
+    // Update player tile
+    if (movingPlayerNumber == 1)
+    {
+        player1Tile = targetTile;
+    }
+    else
+    {
+        player2Tile = targetTile;
+    }
+
+    remainingMoves--;
+
+    if (diceText != null)
+    {
+        diceText.text = "Moves left: " + remainingMoves;
+    }
+
+    // Apply tile effects after movement
+    EvaluateTileEffect(targetTile);
+
+    // Movement animation finished
+    isAnimatingMove = false;
+
+    // Update available movement highlights
+    RefreshMoveHighlights();
+
+    if (gameOver)
+    {
+        yield break;
+    }
+
+    // End turn when no moves remain
+    if (remainingMoves == 0)
+    {
+        EndTurn();
+    }
+}
 
     private void EvaluateTileEffect(Tile tile)
     {
@@ -1090,7 +1178,12 @@ public class GameManager : MonoBehaviour
                 "PLAYER " + skippedPlayer +
                 " FROZEN - TURN SKIPPED!\nPLAYER " +
                 nextPlayer + " GOES AGAIN!";
+
+            turnText.color = nextPlayer == 1
+                ? player1TurnColor
+                : player2TurnColor;
         }
+        UpdateTurnPanelColor(nextPlayer);
 
         Debug.Log("Player " + skippedPlayer + "'s turn is skipped.");
 
@@ -1249,20 +1342,16 @@ public class GameManager : MonoBehaviour
     {
         if (turnText != null && !isResolvingFrozenTurn)
         {
-            turnText.text = "Turn: Player " + currentPlayer;
-        }
+            turnText.text = "PLAYER " + currentPlayer + " TURN";
 
-        if (scoreP1Text != null)
+            turnText.color = currentPlayer == 1
+                ? player1TurnColor
+                : player2TurnColor;
+        }
+        if (!isResolvingFrozenTurn)
         {
-            scoreP1Text.text = "P1: " + itemsP1 + "/10";
+            UpdateTurnPanelColor(currentPlayer);
         }
-
-        if (scoreP2Text != null)
-        {
-            scoreP2Text.text = "P2: " + itemsP2 + "/10";
-        }
-
-        // Player 1 inventory
         if (player1InventoryText != null)
         {
             player1InventoryText.text =
@@ -1341,6 +1430,151 @@ public class GameManager : MonoBehaviour
             if (buttonText != null)
             {
                 buttonText.text = "Freeze";
+            }
+        }
+        RefreshMoveHighlights();
+    }
+    // =====================================================
+// RESTART GAME
+// =====================================================
+
+    public void RestartGame()
+    {
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
+        );
+    }
+    // =====================================================
+// RETURN TO MAIN MENU
+// =====================================================
+
+    [Header("Main Menu")]
+    public string mainMenuSceneName = "MainMenu";
+
+    public void ReturnToMainMenu()
+    {
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            mainMenuSceneName
+        );
+    }
+    // =====================================================
+// TURN PANEL COLOR ANIMATION
+// =====================================================
+
+    private void UpdateTurnPanelColor(int playerNumber)
+    {
+        if (turnPanelImage == null)
+            return;
+
+        if (lastPanelPlayer == playerNumber)
+            return;
+
+        lastPanelPlayer = playerNumber;
+
+        Color targetColor = playerNumber == 1
+            ? player1PanelColor
+            : player2PanelColor;
+
+        if (panelColorCoroutine != null)
+        {
+            StopCoroutine(panelColorCoroutine);
+        }
+
+        panelColorCoroutine = StartCoroutine(
+            AnimatePanelColor(targetColor)
+        );
+    }
+
+    private IEnumerator AnimatePanelColor(Color targetColor)
+    {
+        Color startColor = turnPanelImage.color;
+
+        float elapsed = 0f;
+        float duration = Mathf.Max(0.05f, panelTransitionDuration);
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+
+            float t = Mathf.Clamp01(elapsed / duration);
+
+            // Smooth transition
+            t = Mathf.SmoothStep(0f, 1f, t);
+
+            turnPanelImage.color =
+                Color.Lerp(startColor, targetColor, t);
+
+            yield return null;
+        }
+
+        turnPanelImage.color = targetColor;
+        panelColorCoroutine = null;
+    }
+    // =====================================================
+// AVAILABLE MOVEMENT HIGHLIGHTS
+// =====================================================
+
+    private void RefreshMoveHighlights()
+    {
+        Tile[] allTiles = FindObjectsByType<Tile>(FindObjectsSortMode.None);
+
+        // First, remove all existing highlights
+        foreach (Tile tile in allTiles)
+        {
+            tile.SetMoveHighlight(false, Color.white);
+        }
+
+        // Check whether the player can move
+        if (!hasRolled ||
+            isRolling ||
+            isAnimatingMove ||
+            isWallPlacementMode ||
+            remainingMoves <= 0 ||
+            gameOver ||
+            isResolvingFrozenTurn)
+        {
+            return;
+        }
+
+        // Get current player position
+        Tile currentTile = currentPlayer == 1
+            ? player1Tile
+            : player2Tile;
+
+        // Get opponent position
+        Tile opponentTile = currentPlayer == 1
+            ? player2Tile
+            : player1Tile;
+
+        if (currentTile == null)
+            return;
+
+        // Choose highlight color
+        Color highlightColor = currentPlayer == 1
+            ? player1TurnColor
+            : player2TurnColor;
+
+        foreach (Tile tile in allTiles)
+        {
+            if (tile == null)
+                continue;
+
+            // Check adjacency
+            int distance =
+                Mathf.Abs(tile.x - currentTile.x) +
+                Mathf.Abs(tile.y - currentTile.y);
+
+            bool isAdjacent = distance == 1;
+
+            // Check movement restrictions
+            bool isAvailable =
+                isAdjacent &&
+                !tile.isWall &&
+                tile != opponentTile;
+
+            if (isAvailable)
+            {
+                tile.SetMoveHighlight(true, highlightColor);
             }
         }
     }

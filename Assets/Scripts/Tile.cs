@@ -39,10 +39,17 @@ public class Tile : MonoBehaviour, IPointerClickHandler
     [HideInInspector] public BonusType bonusType = BonusType.Points;
 
     private SpriteRenderer spriteRenderer;
+    [Header("Movement Highlight")]
+    private LineRenderer moveHighlightRenderer;
+
+    private static Material highlightMaterial;
 
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
+
+        CreateMoveHighlight();
+
         RefreshColor();
     }
 
@@ -163,4 +170,82 @@ public class Tile : MonoBehaviour, IPointerClickHandler
         if (GameManager.Instance != null)
             GameManager.Instance.OnTileClicked(this);
     }
+    // =====================================================
+// MOVEMENT HIGHLIGHT
+// =====================================================
+
+private void CreateMoveHighlight()
+{
+    if (spriteRenderer == null || spriteRenderer.sprite == null)
+        return;
+
+    GameObject highlightObject = new GameObject("MoveHighlight");
+
+    highlightObject.transform.SetParent(transform, false);
+
+    moveHighlightRenderer = highlightObject.AddComponent<LineRenderer>();
+
+    moveHighlightRenderer.useWorldSpace = false;
+    moveHighlightRenderer.loop = true;
+    moveHighlightRenderer.positionCount = 4;
+
+    moveHighlightRenderer.numCornerVertices = 4;
+
+    Bounds bounds = spriteRenderer.sprite.bounds;
+
+    float size = Mathf.Min(bounds.size.x, bounds.size.y);
+
+    float inset = size * 0.08f;
+    float lineWidth = size * 0.05f;
+
+    moveHighlightRenderer.widthMultiplier = lineWidth;
+
+    moveHighlightRenderer.SetPosition(0,
+        new Vector3(bounds.min.x + inset, bounds.min.y + inset, -0.1f));
+
+    moveHighlightRenderer.SetPosition(1,
+        new Vector3(bounds.min.x + inset, bounds.max.y - inset, -0.1f));
+
+    moveHighlightRenderer.SetPosition(2,
+        new Vector3(bounds.max.x - inset, bounds.max.y - inset, -0.1f));
+
+    moveHighlightRenderer.SetPosition(3,
+        new Vector3(bounds.max.x - inset, bounds.min.y + inset, -0.1f));
+
+    moveHighlightRenderer.sortingLayerID = spriteRenderer.sortingLayerID;
+    moveHighlightRenderer.sortingOrder = spriteRenderer.sortingOrder + 1;
+
+    if (highlightMaterial == null)
+    {
+        Shader shader = Shader.Find("Sprites/Default");
+
+        if (shader == null)
+        {
+            Debug.LogError("Highlight shader not found!");
+            moveHighlightRenderer.enabled = false;
+            return;
+        }
+
+        highlightMaterial = new Material(shader);
+    }
+
+    moveHighlightRenderer.sharedMaterial = highlightMaterial;
+
+    moveHighlightRenderer.enabled = false;
+}
+
+// =====================================================
+// ENABLE / DISABLE HIGHLIGHT
+// =====================================================
+
+public void SetMoveHighlight(bool active, Color highlightColor)
+{
+    if (moveHighlightRenderer == null)
+        return;
+
+    moveHighlightRenderer.startColor = highlightColor;
+    moveHighlightRenderer.endColor = highlightColor;
+
+    moveHighlightRenderer.enabled = active;
+}
 }
