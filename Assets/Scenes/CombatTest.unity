@@ -145,7 +145,7 @@ Transform:
   m_GameObject: {fileID: 23610136}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -3.67, y: -2.6, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1960,7 +1960,7 @@ Transform:
   m_GameObject: {fileID: 301841951}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -1.65, y: -2.57, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -6589,6 +6589,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CombatSystem
   warrior: {fileID: 23610138}
   skeleton: {fileID: 301841953}
+  warriorTile: {fileID: 994671632}
+  skeletonTile: {fileID: 659330575}
 --- !u!1 &2136744797
 GameObject:
   m_ObjectHideFlags: 0

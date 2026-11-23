@@ -10,17 +10,32 @@ public class CombatSystem : MonoBehaviour
     [SerializeField] private Tile warriorTile;
     [SerializeField] private Tile skeletonTile;
 
+    // Combat turns
+    private enum CombatTurn
+    {
+        Warrior,
+        Skeleton,
+        Finished
+    }
+
+    private CombatTurn currentTurn = CombatTurn.Warrior;
+
+    private bool warriorHasAttacked = false;
+
+    private void Start()
+    {
+        currentTurn = CombatTurn.Warrior;
+        warriorHasAttacked = false;
+
+        Debug.Log("Combat started!");
+        Debug.Log("WARRIOR TURN!");
+    }
+
     // ==============================
     // WARRIOR ATTACK
     // ==============================
 
     public void WarriorAttack()
-    {
-        Attack(warrior, skeleton);
-    }
-
-    [ContextMenu("Test Warrior Attack")]
-    private void TestWarriorAttack()
     {
         if (!Application.isPlaying)
         {
@@ -28,7 +43,93 @@ public class CombatSystem : MonoBehaviour
             return;
         }
 
-        WarriorAttack();
+        if (currentTurn != CombatTurn.Warrior)
+        {
+            Debug.LogWarning("It is not Warrior's turn!");
+            return;
+        }
+
+        if (warriorHasAttacked)
+        {
+            Debug.LogWarning(
+                "Warrior has already attacked this turn!"
+            );
+
+            return;
+        }
+
+        // Attack only counts if successful
+        if (!TryAttack(warrior, skeleton))
+        {
+            return;
+        }
+
+        warriorHasAttacked = true;
+
+        if (skeleton.IsDead)
+        {
+            currentTurn = CombatTurn.Finished;
+
+            Debug.Log("WARRIOR WINS!");
+            return;
+        }
+
+        Debug.Log(
+            "Warrior attack used! End your turn."
+        );
+    }
+
+    // ==============================
+    // END WARRIOR TURN
+    // ==============================
+
+    public void EndWarriorTurn()
+    {
+        if (!Application.isPlaying)
+        {
+            Debug.LogWarning("Start the game first!");
+            return;
+        }
+
+        if (currentTurn != CombatTurn.Warrior)
+        {
+            Debug.LogWarning("Cannot end Warrior turn!");
+            return;
+        }
+
+        if (warrior == null || skeleton == null)
+        {
+            Debug.LogError("Combat participants are missing!");
+            return;
+        }
+
+        currentTurn = CombatTurn.Skeleton;
+
+        Debug.Log("SKELETON TURN!");
+
+        SkeletonAttack();
+
+        if (warrior.IsDead)
+        {
+            currentTurn = CombatTurn.Finished;
+
+            Debug.Log("SKELETON WINS!");
+            return;
+        }
+
+        if (skeleton.IsDead)
+        {
+            currentTurn = CombatTurn.Finished;
+
+            Debug.Log("WARRIOR WINS!");
+            return;
+        }
+
+        // Start next Warrior turn
+        currentTurn = CombatTurn.Warrior;
+        warriorHasAttacked = false;
+
+        Debug.Log("WARRIOR TURN!");
     }
 
     // ==============================
@@ -37,44 +138,41 @@ public class CombatSystem : MonoBehaviour
 
     public void SkeletonAttack()
     {
-        Attack(skeleton, warrior);
-    }
-
-    [ContextMenu("Test Skeleton Attack")]
-    private void TestSkeletonAttack()
-    {
-        if (!Application.isPlaying)
+        if (!Application.isPlaying ||
+            currentTurn != CombatTurn.Skeleton)
         {
-            Debug.LogWarning("Start the game first!");
+            Debug.LogWarning("It is not Skeleton's turn!");
             return;
         }
 
-        SkeletonAttack();
+        TryAttack(skeleton, warrior);
     }
 
     // ==============================
-    // COMBAT SYSTEM
+    // ATTACK CALCULATION
     // ==============================
 
-    public void Attack(CombatUnit attacker, CombatUnit defender)
+    private bool TryAttack(
+        CombatUnit attacker,
+        CombatUnit defender)
     {
         if (attacker == null || defender == null)
         {
             Debug.LogError("Combat participants are missing!");
-            return;
+            return false;
         }
 
         if (attacker.IsDead || defender.IsDead)
         {
-            Debug.LogWarning("A defeated character cannot fight!");
-            return;
-        }
+            Debug.LogWarning(
+                "A defeated character cannot fight!"
+            );
 
-        // Identify attacker and defender positions
+            return false;
+        }
 
         Tile attackerTile;
         Tile defenderTile;
-
         if (attacker == warrior && defender == skeleton)
         {
             attackerTile = warriorTile;
@@ -88,24 +186,19 @@ public class CombatSystem : MonoBehaviour
         else
         {
             Debug.LogError("Unknown combat participants!");
-            return;
+            return false;
         }
-
-        // Check positions
 
         if (attackerTile == null || defenderTile == null)
         {
             Debug.LogWarning("Combat tiles are not assigned!");
-            return;
+            return false;
         }
 
-        // Calculate distance between characters
-
+        // Check melee distance
         int distance =
             Mathf.Abs(attackerTile.x - defenderTile.x) +
             Mathf.Abs(attackerTile.y - defenderTile.y);
-
-        // Melee attack requires an adjacent tile
 
         if (distance != 1)
         {
@@ -113,13 +206,10 @@ public class CombatSystem : MonoBehaviour
                 $"{attacker.unitName} cannot attack! Target is not adjacent."
             );
 
-            return;
+            return false;
         }
 
-        // ==============================
-        // DICE ROLL
-        // ==============================
-
+        // Roll D6 for each Strength point
         int totalRoll = 0;
 
         for (int i = 0; i < attacker.strength; i++)
@@ -128,21 +218,42 @@ public class CombatSystem : MonoBehaviour
 
             totalRoll += diceRoll;
 
-            Debug.Log($"{attacker.unitName} rolled D6: {diceRoll}");
+            Debug.Log(
+                $"{attacker.unitName} rolled D6: {diceRoll}"
+            );
         }
 
-        // ==============================
-        // DAMAGE CALCULATION
-        // ==============================
+        // Calculate damage
+        int damage = Mathf.Max(
+            0,
+            totalRoll - defender.shield
+        );
 
-        int damage = Mathf.Max(0, totalRoll - defender.shield);
-
-        Debug.Log($"{attacker.unitName} attacks {defender.unitName}!");
+        Debug.Log(
+            $"{attacker.unitName} attacks {defender.unitName}!"
+        );
 
         Debug.Log($"Total roll: {totalRoll}");
-
         Debug.Log($"Damage after shield: {damage}");
 
         defender.TakeDamage(damage);
+
+        return true;
+    }
+
+    // ==============================
+    // TEST COMMANDS
+    // ==============================
+
+    [ContextMenu("Test Warrior Attack")]
+    private void TestWarriorAttack()
+    {
+        WarriorAttack();
+    }
+
+    [ContextMenu("Test End Warrior Turn")]
+    private void TestEndWarriorTurn()
+    {
+        EndWarriorTurn();
     }
 }
