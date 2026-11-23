@@ -1,20 +1,22 @@
-
 using UnityEngine;
 using UnityEngine.EventSystems;
 using TMPro;
 
 public enum BonusType
 {
-    Points,
-    Wall,
-    Freeze
+    Points
 }
 
+[RequireComponent(typeof(SpriteRenderer))]
 public class Tile : MonoBehaviour, IPointerClickHandler
 {
     [Header("Tile Coordinates")]
     public int x;
     public int y;
+
+    [Header("Movement Cost")]
+    [Range(1, 2)]
+    public int movementCost = 1;
 
     [Header("Tile Types")]
     public bool isBadTile = false;
@@ -27,35 +29,50 @@ public class Tile : MonoBehaviour, IPointerClickHandler
     [Header("Tile Colours")]
     public Color normalColor = Color.white;
     public Color pointsColor = Color.yellow;
-    public Color wallBonusColor = new Color(0.1f, 0.65f, 1f);
-    public Color freezeBonusColor = new Color(0.65f, 0.25f, 1f);
     public Color wallColor = Color.gray;
     public Color trapColor = Color.red;
     public Color finishColor = Color.green;
 
+    [Header("Tile State")]
     [HideInInspector] public bool isRevealed = false;
-    [HideInInspector] public bool isWall = false;
-    [HideInInspector] public int wallTurnsRemaining = 0;
+    [Tooltip("Blocks movement when enabled. This is a board obstacle, not a player ability.")]
+    public bool isWall = false;
     [HideInInspector] public BonusType bonusType = BonusType.Points;
 
     private SpriteRenderer spriteRenderer;
-    [Header("Movement Highlight")]
     private LineRenderer moveHighlightRenderer;
-
     private static Material highlightMaterial;
 
     private void Awake()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-
+        CacheComponents();
         CreateMoveHighlight();
-
         RefreshColor();
     }
 
     private void Start()
     {
         RefreshColor();
+    }
+
+    private void OnValidate()
+    {
+        movementCost = Mathf.Clamp(movementCost, 1, 2);
+
+        if (Application.isPlaying)
+        {
+            CacheComponents();
+            RefreshColor();
+        }
+    }
+
+    private void CacheComponents()
+    {
+        if (spriteRenderer == null)
+            spriteRenderer = GetComponent<SpriteRenderer>();
+
+        if (tileIndicatorText == null)
+            tileIndicatorText = GetComponentInChildren<TMP_Text>(true);
     }
 
     public void RevealTile()
@@ -87,34 +104,38 @@ public class Tile : MonoBehaviour, IPointerClickHandler
 
     public void ShowItem()
     {
+        hasItem = true;
+        bonusType = BonusType.Points;
         RefreshColor();
     }
 
     public void HideItem()
     {
+        hasItem = false;
         RefreshColor();
     }
 
-    public void PlaceWall(int turns)
+    /// <summary>
+    /// Sets a board obstacle. This does not create or activate a Wall ability.
+    /// </summary>
+    public void SetWall(bool blocked)
     {
-        isWall = true;
-        wallTurnsRemaining = turns;
+        isWall = blocked;
         RefreshColor();
     }
 
-    public void RemoveWall()
+    /// <summary>
+    /// Updates the tile's appearance based on its current state.
+    /// </summary>
+    public void RefreshColor()
     {
-        isWall = false;
-        wallTurnsRemaining = 0;
-        RefreshColor();
-    }
+        if (spriteRenderer == null)
+            CacheComponents();
 
-    private void RefreshColor()
-    {
         if (spriteRenderer == null)
             return;
 
-        string indicator = "";
+        string indicator = string.Empty;
         Color tileColor = normalColor;
 
         if (isWall)
@@ -128,23 +149,8 @@ public class Tile : MonoBehaviour, IPointerClickHandler
         }
         else if (hasItem)
         {
-            switch (bonusType)
-            {
-                case BonusType.Points:
-                    tileColor = pointsColor;
-                    indicator = "+1";
-                    break;
-
-                case BonusType.Wall:
-                    tileColor = wallBonusColor;
-                    indicator = "WALL";
-                    break;
-
-                case BonusType.Freeze:
-                    tileColor = freezeBonusColor;
-                    indicator = "FREEZE";
-                    break;
-            }
+            tileColor = pointsColor;
+            indicator = "+1";
         }
         else if (isBadTile && isRevealed)
         {
@@ -157,7 +163,6 @@ public class Tile : MonoBehaviour, IPointerClickHandler
         if (tileIndicatorText != null)
         {
             bool showIndicator = !string.IsNullOrEmpty(indicator);
-
             tileIndicatorText.gameObject.SetActive(showIndicator);
 
             if (showIndicator)
@@ -167,85 +172,85 @@ public class Tile : MonoBehaviour, IPointerClickHandler
 
     public void OnPointerClick(PointerEventData eventData)
     {
+        if (eventData != null && eventData.button != PointerEventData.InputButton.Left)
+            return;
+
         if (GameManager.Instance != null)
             GameManager.Instance.OnTileClicked(this);
     }
-    // =====================================================
-// MOVEMENT HIGHLIGHT
-// =====================================================
 
-private void CreateMoveHighlight()
-{
-    if (spriteRenderer == null || spriteRenderer.sprite == null)
-        return;
-
-    GameObject highlightObject = new GameObject("MoveHighlight");
-
-    highlightObject.transform.SetParent(transform, false);
-
-    moveHighlightRenderer = highlightObject.AddComponent<LineRenderer>();
-
-    moveHighlightRenderer.useWorldSpace = false;
-    moveHighlightRenderer.loop = true;
-    moveHighlightRenderer.positionCount = 4;
-
-    moveHighlightRenderer.numCornerVertices = 4;
-
-    Bounds bounds = spriteRenderer.sprite.bounds;
-
-    float size = Mathf.Min(bounds.size.x, bounds.size.y);
-
-    float inset = size * 0.08f;
-    float lineWidth = size * 0.05f;
-
-    moveHighlightRenderer.widthMultiplier = lineWidth;
-
-    moveHighlightRenderer.SetPosition(0,
-        new Vector3(bounds.min.x + inset, bounds.min.y + inset, -0.1f));
-
-    moveHighlightRenderer.SetPosition(1,
-        new Vector3(bounds.min.x + inset, bounds.max.y - inset, -0.1f));
-
-    moveHighlightRenderer.SetPosition(2,
-        new Vector3(bounds.max.x - inset, bounds.max.y - inset, -0.1f));
-
-    moveHighlightRenderer.SetPosition(3,
-        new Vector3(bounds.max.x - inset, bounds.min.y + inset, -0.1f));
-
-    moveHighlightRenderer.sortingLayerID = spriteRenderer.sortingLayerID;
-    moveHighlightRenderer.sortingOrder = spriteRenderer.sortingOrder + 1;
-
-    if (highlightMaterial == null)
+    private void CreateMoveHighlight()
     {
-        Shader shader = Shader.Find("Sprites/Default");
-
-        if (shader == null)
-        {
-            Debug.LogError("Highlight shader not found!");
-            moveHighlightRenderer.enabled = false;
+        if (spriteRenderer == null || spriteRenderer.sprite == null)
             return;
+
+        Transform existingHighlight = transform.Find("MoveHighlight");
+        if (existingHighlight != null)
+        {
+            moveHighlightRenderer = existingHighlight.GetComponent<LineRenderer>();
+            if (moveHighlightRenderer != null)
+            {
+                moveHighlightRenderer.enabled = false;
+                return;
+            }
         }
 
-        highlightMaterial = new Material(shader);
+        GameObject highlightObject = new GameObject("MoveHighlight");
+        highlightObject.transform.SetParent(transform, false);
+
+        moveHighlightRenderer = highlightObject.AddComponent<LineRenderer>();
+        moveHighlightRenderer.useWorldSpace = false;
+        moveHighlightRenderer.loop = true;
+        moveHighlightRenderer.positionCount = 4;
+        moveHighlightRenderer.numCornerVertices = 4;
+        moveHighlightRenderer.numCapVertices = 2;
+
+        Bounds bounds = spriteRenderer.sprite.bounds;
+        float width = bounds.size.x;
+        float height = bounds.size.y;
+        float insetX = width * 0.08f;
+        float insetY = height * 0.08f;
+        float lineWidth = Mathf.Min(width, height) * 0.05f;
+
+        moveHighlightRenderer.widthMultiplier = lineWidth;
+        moveHighlightRenderer.SetPosition(0, new Vector3(bounds.min.x + insetX, bounds.min.y + insetY, -0.1f));
+        moveHighlightRenderer.SetPosition(1, new Vector3(bounds.min.x + insetX, bounds.max.y - insetY, -0.1f));
+        moveHighlightRenderer.SetPosition(2, new Vector3(bounds.max.x - insetX, bounds.max.y - insetY, -0.1f));
+        moveHighlightRenderer.SetPosition(3, new Vector3(bounds.max.x - insetX, bounds.min.y + insetY, -0.1f));
+
+        moveHighlightRenderer.sortingLayerID = spriteRenderer.sortingLayerID;
+        moveHighlightRenderer.sortingOrder = spriteRenderer.sortingOrder + 1;
+
+        if (highlightMaterial == null)
+        {
+            Shader shader = Shader.Find("Sprites/Default");
+            if (shader == null)
+            {
+                Debug.LogError("Tile: Could not find Sprites/Default shader for movement highlight.", this);
+                moveHighlightRenderer.enabled = false;
+                return;
+            }
+
+            highlightMaterial = new Material(shader);
+            highlightMaterial.name = "Tile Movement Highlight Material";
+        }
+
+        moveHighlightRenderer.sharedMaterial = highlightMaterial;
+        moveHighlightRenderer.startColor = Color.white;
+        moveHighlightRenderer.endColor = Color.white;
+        moveHighlightRenderer.enabled = false;
     }
 
-    moveHighlightRenderer.sharedMaterial = highlightMaterial;
+    public void SetMoveHighlight(bool active, Color highlightColor)
+    {
+        if (moveHighlightRenderer == null)
+            CreateMoveHighlight();
 
-    moveHighlightRenderer.enabled = false;
-}
+        if (moveHighlightRenderer == null)
+            return;
 
-// =====================================================
-// ENABLE / DISABLE HIGHLIGHT
-// =====================================================
-
-public void SetMoveHighlight(bool active, Color highlightColor)
-{
-    if (moveHighlightRenderer == null)
-        return;
-
-    moveHighlightRenderer.startColor = highlightColor;
-    moveHighlightRenderer.endColor = highlightColor;
-
-    moveHighlightRenderer.enabled = active;
-}
+        moveHighlightRenderer.startColor = highlightColor;
+        moveHighlightRenderer.endColor = highlightColor;
+        moveHighlightRenderer.enabled = active;
+    }
 }
