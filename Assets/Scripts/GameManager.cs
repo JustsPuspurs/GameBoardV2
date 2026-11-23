@@ -20,17 +20,15 @@ public class GameManager : MonoBehaviour
     public Transform player1;
     public Tile player1Tile;
 
-    [Tooltip("Legacy Player 2 references are no longer used by DR-02. Leave empty or ignore them.")]
+    [Tooltip("Legacy Player 2 references are no longer used by DR-02.")]
     public Transform player2;
     public Tile player2Tile;
 
     public Tile finishTile;
 
-    [Header("Warrior Movement")]
-    [Tooltip("Each Tile has its own Movement Cost (1 or 2), set on the Tile component in the Inspector.")]
+    [Header("Player Movement")]
+    public PlayerMovement playerMovement;
     [Min(1)] public int agility = 2;
-    [Min(0.05f)] public float moveDuration = 0.3f;
-    public Color availableMoveColor = new Color(0.2f, 0.6f, 1f, 1f);
 
     [Header("UI")]
     public TMP_Text diceText;
@@ -41,7 +39,6 @@ public class GameManager : MonoBehaviour
 
     [Header("Dice Animation")]
     public Image diceImage;
-    [Tooltip("Optional second dice image. If not assigned, the first image still animates and the text displays every die result.")]
     public Image diceImage2;
     public Button rollButton;
     public Button endTurnButton;
@@ -55,18 +52,12 @@ public class GameManager : MonoBehaviour
     [Min(0.05f)] public float panelTransitionDuration = 0.4f;
 
     [Header("Monster Turn Integration")]
-    [Tooltip("Optional event for an existing monster-turn system. It is not a monster AI script.")]
     public UnityEvent onMonsterTurnStarted;
-    [Tooltip("If no monster-turn listener is connected, automatically starts the next Warrior turn after a short delay.")]
     public bool autoCompleteMonsterPhaseWhenNoListener = true;
 
     [Header("Bonus and Trap Generation")]
     [Min(0)] public int startingPointBonuses = 4;
     [Min(0)] public int activeBadTilesCount = 2;
-
-    [Header("Other Characters / Occupied Tiles")]
-    [Tooltip("Optional transforms that occupy tiles and block Warrior movement, such as monsters already present in the scene.")]
-    public Transform[] otherCharacters;
 
     [Header("Main Menu")]
     public string mainMenuSceneName = "MainMenu";
@@ -77,12 +68,10 @@ public class GameManager : MonoBehaviour
     private int pendingBonusRespawns;
     private bool hasRolled;
     private bool isRolling;
-    private bool isAnimatingMove;
     private bool gameOver;
 
     private Tile[] allTiles;
     private Tile warriorStartTile;
-    private float gridOffset = 1f;
     private Coroutine panelColorCoroutine;
     private Coroutine monsterPhaseCoroutine;
     private int lastPanelPhase = -1;
@@ -90,20 +79,30 @@ public class GameManager : MonoBehaviour
     public int RemainingMoves => remainingMoves;
     public TurnPhase CurrentPhase => currentPhase;
     public bool HasRolled => hasRolled;
-    public bool IsBusy => isRolling || isAnimatingMove;
+    public bool IsBusy => isRolling || (playerMovement != null && playerMovement.IsAnimatingMove);
+    public bool CanWarriorAttemptMovement =>
+        !gameOver &&
+        currentPhase == TurnPhase.HeroTurn &&
+        hasRolled &&
+        !isRolling &&
+        playerMovement != null &&
+        !playerMovement.IsAnimatingMove &&
+        remainingMoves > 0 &&
+        player1 != null &&
+        player1Tile != null;
 
     private void Awake()
     {
         if (Instance != null && Instance != this)
-        {
             Debug.LogWarning("More than one GameManager exists in the scene. The newest one will be used.");
-        }
+
         Instance = this;
     }
 
     private void Start()
     {
-        if (winText != null) winText.text = string.Empty;
+        if (winText != null)
+            winText.text = string.Empty;
 
         allTiles = FindObjectsOfType<Tile>();
         if (allTiles == null || allTiles.Length == 0)
@@ -112,28 +111,36 @@ public class GameManager : MonoBehaviour
             enabled = false;
             return;
         }
-
+        CalculateGridCoordinates();
+        
         if (player1 == null)
-            Debug.LogError("GameManager: Assign the Warrior to the Player 1 field (the old Player 1 object). ");
+            Debug.LogError("GameManager: Assign the Warrior to the Player 1 field.");
 
         if (player1Tile == null)
-            Debug.LogError("GameManager: Assign the Warrior's starting tile to Player 1 Tile.");
+            Debug.LogError("GameManager: Assign the Warrior starting tile to Player 1 Tile.");
+
+        if (playerMovement == null && player1 != null)
+            playerMovement = player1.GetComponent<PlayerMovement>();
+
+        if (playerMovement == null)
+        {
+            Debug.LogError("GameManager: Add PlayerMovement to the Warrior and assign it here (or let it auto-find on the Warrior).");
+            enabled = false;
+            return;
+        }
 
         warriorStartTile = player1Tile;
-
         FindFinishTile();
-        CalculateGridCoordinates();
 
-        if (player1 != null && player1Tile != null)
-            player1.position = player1Tile.transform.position;
+        playerMovement.Initialize(this, player1, player1Tile, allTiles);
 
-        // Player 2 is deliberately not positioned or used. It is a legacy PvP reference.
         GenerateRandomBadTiles();
         GenerateRandomItems();
 
         currentPhase = TurnPhase.HeroTurn;
         hasRolled = false;
         remainingMoves = 0;
+
         UpdateUI();
         SetDiceImagesToDefault();
         UpdateButtons();
@@ -141,12 +148,70 @@ public class GameManager : MonoBehaviour
         if (diceText != null)
             diceText.text = "Warrior turn - roll the dice.";
     }
+    private void CalculateGridCoordinates()
+    {
+        List<float> xPositions = new List<float>();
+        List<float> yPositions = new List<float>();
 
+        foreach (Tile tile in allTiles)
+        {
+            if (tile == null) continue;
+
+            float x = tile.transform.position.x;
+            float y = tile.transform.position.y;
+
+            if (!xPositions.Exists(p => Mathf.Abs(p - x) < 0.001f))
+                xPositions.Add(x);
+
+            if (!yPositions.Exists(p => Mathf.Abs(p - y) < 0.001f))
+                yPositions.Add(y);
+        }
+
+        xPositions.Sort();
+        yPositions.Sort();
+
+        foreach (Tile tile in allTiles)
+        {
+            if (tile == null) continue;
+
+            tile.x = GetCoordinateIndex(xPositions, tile.transform.position.x);
+            tile.y = GetCoordinateIndex(yPositions, tile.transform.position.y);
+        }
+
+        Debug.Log("Tile coordinates initialized successfully.");
+    }
+
+    private int GetCoordinateIndex(List<float> positions, float value)
+    {
+        for (int i = 0; i < positions.Count; i++)
+        {
+            if (Mathf.Abs(positions[i] - value) < 0.001f)
+                return i;
+        }
+
+        return -1;
+    }
+
+    private float FindGridSpacing(List<float> positions)
+    {
+        float spacing = float.MaxValue;
+
+        for (int i = 1; i < positions.Count; i++)
+        {
+            float difference = positions[i] - positions[i - 1];
+
+            if (difference > 0.001f && difference < spacing)
+                spacing = difference;
+        }
+
+        return spacing == float.MaxValue ? 1f : spacing;
+    }
     private void FindFinishTile()
     {
         if (finishTile != null)
         {
             finishTile.isFinishTile = true;
+            finishTile.RefreshColor();
             return;
         }
 
@@ -160,186 +225,46 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void CalculateGridCoordinates()
-    {
-        if (allTiles.Length > 1)
-        {
-            float minDistance = float.MaxValue;
-            Vector3 firstPosition = allTiles[0].transform.position;
-
-            for (int i = 1; i < allTiles.Length; i++)
-            {
-                if (allTiles[i] == null) continue;
-                float distance = Vector3.Distance(firstPosition, allTiles[i].transform.position);
-                if (distance > 0.1f && distance < minDistance)
-                    minDistance = distance;
-            }
-
-            if (minDistance < float.MaxValue)
-                gridOffset = minDistance;
-        }
-
-        foreach (Tile tile in allTiles)
-        {
-            if (tile == null) continue;
-            tile.x = Mathf.RoundToInt(tile.transform.position.x / gridOffset);
-            tile.y = Mathf.RoundToInt(tile.transform.position.y / gridOffset);
-        }
-    }
-
-    // -------------------- Tile clicking and movement --------------------
-
     public void OnTileClicked(Tile tile)
     {
-        if (tile == null) return;
-        TryMoveToTile(tile);
+        if (playerMovement != null)
+            playerMovement.OnTileClicked(tile);
     }
 
-    public void TryMoveToTile(Tile targetTile)
+    public void SetStatusText(string message)
     {
-        if (!CanAttemptMovement()) return;
+        if (diceText != null)
+            diceText.text = message;
+    }
 
-        if (!IsValidMove(player1Tile, targetTile, out string reason))
-        {
-            if (!string.IsNullOrEmpty(reason) && diceText != null)
-                diceText.text = reason;
-            return;
-        }
-
-        // Lock movement immediately. A second click cannot start another coroutine.
-        isAnimatingMove = true;
+    public void SpendMovementPoints(int cost)
+    {
+        remainingMoves = Mathf.Max(0, remainingMoves - Mathf.Max(0, cost));
         UpdateButtons();
-        RefreshMoveHighlights();
-        StartCoroutine(SmoothMoveWarrior(targetTile, targetTile.movementCost));
     }
 
-    private bool CanAttemptMovement()
+    public void OnWarriorMovedToTile(Tile tile)
     {
-        return !gameOver &&
-               currentPhase == TurnPhase.HeroTurn &&
-               hasRolled &&
-               !isRolling &&
-               !isAnimatingMove &&
-               remainingMoves > 0 &&
-               player1 != null &&
-               player1Tile != null;
-    }
+        if (tile == null)
+            return;
 
-    // This is the single source of truth used by both click validation and highlights.
-    private bool IsValidMove(Tile fromTile, Tile targetTile, out string reason)
-    {
-        reason = string.Empty;
+        player1Tile = tile;
+        EvaluateTileEffect(tile);
 
-        if (fromTile == null || targetTile == null || targetTile == fromTile)
-        {
-            reason = "Choose an adjacent tile.";
-            return false;
-        }
-
-        int manhattanDistance = Mathf.Abs(targetTile.x - fromTile.x) + Mathf.Abs(targetTile.y - fromTile.y);
-        if (manhattanDistance != 1)
-        {
-            reason = "Only four-directional adjacent moves are allowed.";
-            return false;
-        }
-
-        if (targetTile.isWall)
-        {
-            reason = "Blocked: this tile is a wall.";
-            return false;
-        }
-
-        if (targetTile.movementCost < 1 || targetTile.movementCost > 2)
-        {
-            reason = "Invalid tile movement cost. Set it to 1 or 2.";
-            return false;
-        }
-
-        if (targetTile.movementCost > remainingMoves)
-        {
-            reason = "Not enough movement points.";
-            return false;
-        }
-
-        if (IsOccupiedByOtherCharacter(targetTile))
-        {
-            reason = "Blocked: another character occupies this tile.";
-            return false;
-        }
-
-        return true;
-    }
-
-    private bool IsOccupiedByOtherCharacter(Tile tile)
-    {
-        if (tile == null || otherCharacters == null) return false;
-
-        foreach (Transform character in otherCharacters)
-        {
-            if (character == null || character == player1) continue;
-            if (Vector3.Distance(character.position, tile.transform.position) < 0.05f)
-                return true;
-        }
-
-        return false;
-    }
-
-    private IEnumerator SmoothMoveWarrior(Tile targetTile, int movementCost)
-    {
-        if (player1 == null || targetTile == null)
-        {
-            isAnimatingMove = false;
-            UpdateButtons();
-            RefreshMoveHighlights();
-            yield break;
-        }
-
-        Vector3 startPosition = player1.position;
-        Vector3 targetPosition = targetTile.transform.position;
-        float elapsed = 0f;
-        float duration = Mathf.Max(0.05f, moveDuration);
-
-        while (elapsed < duration)
-        {
-            if (player1 == null || targetTile == null)
-            {
-                isAnimatingMove = false;
-                UpdateButtons();
-                RefreshMoveHighlights();
-                yield break;
-            }
-
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / duration);
-            t = t * t * (3f - 2f * t);
-            player1.position = Vector3.Lerp(startPosition, targetPosition, t);
-            yield return null;
-        }
-
-        player1.position = targetPosition;
-        player1Tile = targetTile;
-
-        // Spend points only after the move has completed successfully.
-        remainingMoves = Mathf.Max(0, remainingMoves - movementCost);
-        EvaluateTileEffect(targetTile);
-
-        isAnimatingMove = false;
         if (diceText != null && !gameOver)
             diceText.text = "Movement points left: " + remainingMoves;
 
         UpdateUI();
         UpdateButtons();
-        RefreshMoveHighlights();
     }
-
-    // -------------------- Dice: Agility x D6 --------------------
 
     public void RollDice()
     {
-        if (gameOver || currentPhase != TurnPhase.HeroTurn || hasRolled || isRolling || isAnimatingMove)
+        if (gameOver || currentPhase != TurnPhase.HeroTurn || hasRolled || isRolling ||
+            (playerMovement != null && playerMovement.IsAnimatingMove))
             return;
 
-        hasRolled = true; // Set immediately to prevent repeated button presses.
+        hasRolled = true;
         isRolling = true;
         remainingMoves = 0;
         UpdateButtons();
@@ -378,7 +303,6 @@ public class GameManager : MonoBehaviour
 
         if (hasValidFaces && diceImage != null)
         {
-            // Animate the first die. If a second image is assigned, animate the second die at the same time.
             Coroutine firstAnimation = StartCoroutine(AnimateSingleDie(diceImage, results[0]));
             Coroutine secondAnimation = null;
 
@@ -404,13 +328,13 @@ public class GameManager : MonoBehaviour
 
         UpdateButtons();
         RefreshMoveHighlights();
-
         Debug.Log("Warrior rolled " + resultsText + " = " + total + " movement points.");
     }
 
     private IEnumerator AnimateSingleDie(Image image, int finalResult)
     {
-        if (image == null) yield break;
+        if (image == null)
+            yield break;
 
         float elapsed = 0f;
         float nextFaceTime = 0f;
@@ -437,23 +361,22 @@ public class GameManager : MonoBehaviour
         image.rectTransform.localRotation = Quaternion.identity;
     }
 
-    // -------------------- End turn and monster phase hook --------------------
-
     public void EndTurn()
     {
-        if (gameOver || currentPhase != TurnPhase.HeroTurn || isRolling || isAnimatingMove)
+        if (gameOver || currentPhase != TurnPhase.HeroTurn || isRolling ||
+            (playerMovement != null && playerMovement.IsAnimatingMove))
             return;
 
-        // End Turn is allowed even if the Warrior has no legal move or unused points remain.
         hasRolled = false;
         remainingMoves = 0;
         currentPhase = TurnPhase.MonsterTurn;
+
         RefreshMoveHighlights();
         UpdateButtons();
         UpdateUI();
 
         if (turnText != null)
-            turnText.text = "Monster turn";
+            turnText.text = "MONSTER TURN";
         if (diceText != null)
             diceText.text = "Warrior turn ended.";
 
@@ -461,26 +384,22 @@ public class GameManager : MonoBehaviour
         {
             onMonsterTurnStarted.Invoke();
         }
+        else if (autoCompleteMonsterPhaseWhenNoListener)
+        {
+            if (monsterPhaseCoroutine != null)
+                StopCoroutine(monsterPhaseCoroutine);
+            monsterPhaseCoroutine = StartCoroutine(CompleteMonsterPhaseNextFrame());
+        }
         else
         {
-            // DR-02 does not create monster AI. This hook allows an existing monster system to be connected later.
-            if (autoCompleteMonsterPhaseWhenNoListener)
-            {
-                if (monsterPhaseCoroutine != null)
-                    StopCoroutine(monsterPhaseCoroutine);
-                monsterPhaseCoroutine = StartCoroutine(CompleteMonsterPhaseNextFrame());
-            }
-            else
-            {
-                Debug.Log("Monster phase is waiting. Call CompleteMonsterTurn() when the existing monster logic finishes.");
-            }
+            Debug.Log("Monster phase is waiting. Call CompleteMonsterTurn() when existing monster logic finishes.");
         }
     }
 
-    // Call this from the existing DR-01 combat script after a successful melee attack.
     public void EndTurnAfterAttack()
     {
-        if (gameOver || currentPhase != TurnPhase.HeroTurn || isRolling || isAnimatingMove)
+        if (gameOver || currentPhase != TurnPhase.HeroTurn || isRolling ||
+            (playerMovement != null && playerMovement.IsAnimatingMove))
             return;
 
         EndTurn();
@@ -492,7 +411,6 @@ public class GameManager : MonoBehaviour
         CompleteMonsterTurn();
     }
 
-    // Call this from an existing monster-turn controller when its turn has finished.
     public void CompleteMonsterTurn()
     {
         if (gameOver || currentPhase != TurnPhase.MonsterTurn)
@@ -501,6 +419,7 @@ public class GameManager : MonoBehaviour
         currentPhase = TurnPhase.HeroTurn;
         hasRolled = false;
         remainingMoves = 0;
+
         SpawnPendingBonusItems();
 
         if (diceText != null)
@@ -511,11 +430,10 @@ public class GameManager : MonoBehaviour
         RefreshMoveHighlights();
     }
 
-    // -------------------- Tile effects, bonuses and traps --------------------
-
     private void EvaluateTileEffect(Tile tile)
     {
-        if (tile == null) return;
+        if (tile == null)
+            return;
 
         if (tile.isBadTile && !tile.isRevealed)
         {
@@ -531,8 +449,10 @@ public class GameManager : MonoBehaviour
             tile.CollectItem();
             collectedPoints++;
             pendingBonusRespawns++;
+
             if (diceText != null)
                 diceText.text = "Bonus collected! +1 point. Movement left: " + remainingMoves;
+
             Debug.Log("Warrior collected a point bonus. Total: " + collectedPoints);
         }
 
@@ -542,8 +462,10 @@ public class GameManager : MonoBehaviour
             {
                 gameOver = true;
                 currentPhase = TurnPhase.GameOver;
-                if (winText != null) winText.text = "WARRIOR WINS!";
-                if (diceText != null) diceText.text = "Victory!";
+                if (winText != null)
+                    winText.text = "WARRIOR WINS!";
+                if (diceText != null)
+                    diceText.text = "Victory!";
             }
             else
             {
@@ -551,11 +473,8 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (gameOver)
-        {
-            SetAllHighlightsOff();
-            UpdateButtons();
-        }
+        if (gameOver && playerMovement != null)
+            playerMovement.SetAllHighlightsOff();
 
         UpdateUI();
     }
@@ -564,7 +483,9 @@ public class GameManager : MonoBehaviour
     {
         foreach (Tile tile in allTiles)
         {
-            if (tile == null) continue;
+            if (tile == null)
+                continue;
+
             tile.hasItem = false;
             tile.bonusType = BonusType.Points;
             tile.HideItem();
@@ -572,11 +493,13 @@ public class GameManager : MonoBehaviour
 
         int spawned = 0;
         int attempts = 0;
+
         while (spawned < startingPointBonuses && attempts < 1000)
         {
             attempts++;
             Tile candidate = allTiles[Random.Range(0, allTiles.Length)];
-            if (!CanSpawnOnTile(candidate)) continue;
+            if (!CanSpawnOnTile(candidate))
+                continue;
 
             candidate.hasItem = true;
             candidate.bonusType = BonusType.Points;
@@ -592,7 +515,9 @@ public class GameManager : MonoBehaviour
         int count = pendingBonusRespawns;
         for (int i = 0; i < count; i++)
         {
-            if (!SpawnRandomBonus()) break;
+            if (!SpawnRandomBonus())
+                break;
+
             pendingBonusRespawns--;
         }
     }
@@ -600,12 +525,15 @@ public class GameManager : MonoBehaviour
     private bool SpawnRandomBonus()
     {
         List<Tile> available = new List<Tile>();
+
         foreach (Tile tile in allTiles)
         {
-            if (CanSpawnOnTile(tile)) available.Add(tile);
+            if (CanSpawnOnTile(tile))
+                available.Add(tile);
         }
 
-        if (available.Count == 0) return false;
+        if (available.Count == 0)
+            return false;
 
         Tile selected = available[Random.Range(0, available.Count)];
         selected.hasItem = true;
@@ -616,10 +544,13 @@ public class GameManager : MonoBehaviour
 
     private bool CanSpawnOnTile(Tile tile)
     {
-        if (tile == null || tile == finishTile || tile.isFinishTile || tile == warriorStartTile)
+        if (tile == null || tile == finishTile || tile.isFinishTile ||
+            tile == warriorStartTile || tile == player1Tile)
             return false;
-        if (tile == player1Tile || tile.isWall || tile.isBadTile || tile.isRevealed || tile.hasItem)
+
+        if (tile.isWall || tile.isBadTile || tile.isRevealed || tile.hasItem)
             return false;
+
         return true;
     }
 
@@ -627,16 +558,20 @@ public class GameManager : MonoBehaviour
     {
         foreach (Tile tile in allTiles)
         {
-            if (tile != null) tile.HideBadTile();
+            if (tile != null)
+                tile.HideBadTile();
         }
 
         int spawned = 0;
         int attempts = 0;
+
         while (spawned < activeBadTilesCount && attempts < 1000)
         {
             attempts++;
             Tile candidate = allTiles[Random.Range(0, allTiles.Length)];
-            if (!CanSpawnOnTile(candidate)) continue;
+            if (!CanSpawnOnTile(candidate))
+                continue;
+
             candidate.SetBadTileHidden();
             spawned++;
         }
@@ -651,49 +586,31 @@ public class GameManager : MonoBehaviour
         {
             attempts++;
             Tile candidate = allTiles[Random.Range(0, allTiles.Length)];
-            if (!CanSpawnOnTile(candidate)) continue;
+            if (!CanSpawnOnTile(candidate))
+                continue;
+
             candidate.SetBadTileHidden();
             return;
         }
+
         Debug.LogWarning("Could not find an available tile for a new trap.");
     }
 
     private IEnumerator ReplaceBadTile(Tile oldTile)
     {
         yield return new WaitForSeconds(0.6f);
-        if (oldTile != null) oldTile.HideBadTile();
-        if (!gameOver) SpawnNewBadTile();
-    }
 
-    // -------------------- UI, highlights and scene controls --------------------
+        if (oldTile != null)
+            oldTile.HideBadTile();
+
+        if (!gameOver)
+            SpawnNewBadTile();
+    }
 
     private void RefreshMoveHighlights()
     {
-        if (allTiles == null) return;
-
-        foreach (Tile tile in allTiles)
-        {
-            if (tile != null)
-                tile.SetMoveHighlight(false, Color.white);
-        }
-
-        if (!CanAttemptMovement()) return;
-
-        foreach (Tile tile in allTiles)
-        {
-            if (tile == null) continue;
-            if (IsValidMove(player1Tile, tile, out _))
-                tile.SetMoveHighlight(true, availableMoveColor);
-        }
-    }
-
-    private void SetAllHighlightsOff()
-    {
-        if (allTiles == null) return;
-        foreach (Tile tile in allTiles)
-        {
-            if (tile != null) tile.SetMoveHighlight(false, Color.white);
-        }
+        if (playerMovement != null)
+            playerMovement.RefreshMoveHighlights();
     }
 
     private void UpdateUI()
@@ -702,14 +619,21 @@ public class GameManager : MonoBehaviour
         {
             switch (currentPhase)
             {
-                case TurnPhase.HeroTurn: turnText.text = "WARRIOR TURN"; break;
-                case TurnPhase.MonsterTurn: turnText.text = "MONSTER TURN"; break;
-                case TurnPhase.GameOver: turnText.text = "GAME OVER"; break;
+                case TurnPhase.HeroTurn:
+                    turnText.text = "WARRIOR TURN";
+                    break;
+                case TurnPhase.MonsterTurn:
+                    turnText.text = "MONSTER TURN";
+                    break;
+                case TurnPhase.GameOver:
+                    turnText.text = "GAME OVER";
+                    break;
             }
         }
 
         if (player1InventoryText != null)
             player1InventoryText.text = "WARRIOR\nPoints: " + collectedPoints + "/10";
+
         if (scoreP1Text != null)
             scoreP1Text.text = collectedPoints.ToString();
 
@@ -720,22 +644,36 @@ public class GameManager : MonoBehaviour
 
     private void UpdateButtons()
     {
-        bool heroCanRoll = !gameOver && currentPhase == TurnPhase.HeroTurn && !hasRolled && !isRolling && !isAnimatingMove;
-        bool heroCanEndTurn = !gameOver && currentPhase == TurnPhase.HeroTurn && !isRolling && !isAnimatingMove;
+        bool heroCanRoll = !gameOver &&
+                           currentPhase == TurnPhase.HeroTurn &&
+                           !hasRolled &&
+                           !isRolling &&
+                           (playerMovement == null || !playerMovement.IsAnimatingMove);
 
-        if (rollButton != null) rollButton.interactable = heroCanRoll;
-        if (endTurnButton != null) endTurnButton.interactable = heroCanEndTurn;
+        bool heroCanEndTurn = !gameOver &&
+                              currentPhase == TurnPhase.HeroTurn &&
+                              !isRolling &&
+                              (playerMovement == null || !playerMovement.IsAnimatingMove);
+
+        if (rollButton != null)
+            rollButton.interactable = heroCanRoll;
+
+        if (endTurnButton != null)
+            endTurnButton.interactable = heroCanEndTurn;
     }
 
     private void SetDiceImagesToDefault()
     {
-        if (diceFaces == null || diceFaces.Length == 0 || diceFaces[0] == null) return;
+        if (diceFaces == null || diceFaces.Length == 0 || diceFaces[0] == null)
+            return;
+
         if (diceImage != null)
         {
             diceImage.sprite = diceFaces[0];
             diceImage.color = Color.white;
             diceImage.rectTransform.localRotation = Quaternion.identity;
         }
+
         if (diceImage2 != null)
         {
             diceImage2.sprite = diceFaces[0];
@@ -746,13 +684,21 @@ public class GameManager : MonoBehaviour
 
     private void UpdateTurnPanelColor()
     {
-        if (turnPanelImage == null) return;
-        int phaseId = currentPhase == TurnPhase.HeroTurn ? 0 : currentPhase == TurnPhase.MonsterTurn ? 1 : 2;
-        if (lastPanelPhase == phaseId) return;
-        lastPanelPhase = phaseId;
+        if (turnPanelImage == null)
+            return;
 
+        int phaseId = currentPhase == TurnPhase.HeroTurn ? 0 :
+                      currentPhase == TurnPhase.MonsterTurn ? 1 : 2;
+
+        if (lastPanelPhase == phaseId)
+            return;
+
+        lastPanelPhase = phaseId;
         Color target = currentPhase == TurnPhase.MonsterTurn ? monsterPanelColor : heroPanelColor;
-        if (panelColorCoroutine != null) StopCoroutine(panelColorCoroutine);
+
+        if (panelColorCoroutine != null)
+            StopCoroutine(panelColorCoroutine);
+
         panelColorCoroutine = StartCoroutine(AnimatePanelColor(target));
     }
 
@@ -761,6 +707,7 @@ public class GameManager : MonoBehaviour
         Color startColor = turnPanelImage.color;
         float elapsed = 0f;
         float duration = Mathf.Max(0.05f, panelTransitionDuration);
+
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
@@ -768,6 +715,7 @@ public class GameManager : MonoBehaviour
             turnPanelImage.color = Color.Lerp(startColor, targetColor, t);
             yield return null;
         }
+
         turnPanelImage.color = targetColor;
         panelColorCoroutine = null;
     }

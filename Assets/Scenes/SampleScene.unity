@@ -500,20 +500,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &57612345
 BoxCollider2D:
@@ -668,20 +666,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &71988750
 BoxCollider2D:
@@ -1517,20 +1513,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &203251221
 BoxCollider2D:
@@ -1685,20 +1679,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &213568492
 BoxCollider2D:
@@ -1885,6 +1877,145 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 236816131}
   m_CullTransparentMesh: 1
+--- !u!1 &257567705
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 257567706}
+  - component: {fileID: 257567708}
+  - component: {fileID: 257567707}
+  m_Layer: 5
+  m_Name: Text (TMP)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &257567706
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 257567705}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 424562366}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &257567707
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 257567705}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_text: 'End Turn
+
+'
+  m_isRightToLeft: 0
+  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontSharedMaterials: []
+  m_fontMaterial: {fileID: 0}
+  m_fontMaterials: []
+  m_fontColor32:
+    serializedVersion: 2
+    rgba: 4281479730
+  m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
+  m_enableVertexGradient: 0
+  m_colorMode: 3
+  m_fontColorGradient:
+    topLeft: {r: 1, g: 1, b: 1, a: 1}
+    topRight: {r: 1, g: 1, b: 1, a: 1}
+    bottomLeft: {r: 1, g: 1, b: 1, a: 1}
+    bottomRight: {r: 1, g: 1, b: 1, a: 1}
+  m_fontColorGradientPreset: {fileID: 0}
+  m_spriteAsset: {fileID: 0}
+  m_tintAllSprites: 0
+  m_StyleSheet: {fileID: 0}
+  m_TextStyleHashCode: -1183493901
+  m_overrideHtmlColors: 0
+  m_faceColor:
+    serializedVersion: 2
+    rgba: 4294967295
+  m_fontSize: 24
+  m_fontSizeBase: 24
+  m_fontWeight: 400
+  m_enableAutoSizing: 0
+  m_fontSizeMin: 18
+  m_fontSizeMax: 72
+  m_fontStyle: 0
+  m_HorizontalAlignment: 2
+  m_VerticalAlignment: 512
+  m_textAlignment: 65535
+  m_characterSpacing: 0
+  m_characterHorizontalScale: 1
+  m_wordSpacing: 0
+  m_lineSpacing: 0
+  m_lineSpacingMax: 0
+  m_paragraphSpacing: 0
+  m_charWidthMaxAdj: 0
+  m_TextWrappingMode: 1
+  m_wordWrappingRatios: 0.4
+  m_overflowMode: 0
+  m_linkedTextComponent: {fileID: 0}
+  parentLinkedComponent: {fileID: 0}
+  m_enableKerning: 0
+  m_ActiveFontFeatures: 6e72656b
+  m_enableExtraPadding: 0
+  checkPaddingRequired: 0
+  m_isRichText: 1
+  m_EmojiFallbackSupport: 1
+  m_parseCtrlCharacters: 1
+  m_isOrthographic: 1
+  m_isCullingEnabled: 0
+  m_horizontalMapping: 0
+  m_verticalMapping: 0
+  m_uvLineOffset: 0
+  m_geometrySortingOrder: 0
+  m_IsTextObjectScaleStatic: 0
+  m_VertexBufferAutoSizeReduction: 0
+  m_useMaxVisibleDescender: 1
+  m_pageToDisplay: 1
+  m_margin: {x: 0, y: 0, z: 0, w: 0}
+  m_isUsingLegacyAnimationComponent: 0
+  m_isVolumetricText: 0
+  m_hasFontAssetChanged: 0
+  m_baseMaterial: {fileID: 0}
+  m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!222 &257567708
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 257567705}
+  m_CullTransparentMesh: 1
 --- !u!1 &331971338
 GameObject:
   m_ObjectHideFlags: 0
@@ -1992,20 +2123,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &331971342
 BoxCollider2D:
@@ -2341,20 +2470,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &396693917
 BoxCollider2D:
@@ -2509,20 +2636,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &419039597
 BoxCollider2D:
@@ -2570,6 +2695,139 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
+--- !u!1 &424562362
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 424562366}
+  - component: {fileID: 424562365}
+  - component: {fileID: 424562364}
+  - component: {fileID: 424562363}
+  m_Layer: 5
+  m_Name: EndTurn
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &424562363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 424562362}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
+  m_Navigation:
+    m_Mode: 3
+    m_WrapAround: 0
+    m_SelectOnUp: {fileID: 0}
+    m_SelectOnDown: {fileID: 0}
+    m_SelectOnLeft: {fileID: 0}
+    m_SelectOnRight: {fileID: 0}
+  m_Transition: 1
+  m_Colors:
+    m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
+    m_HighlightedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+    m_PressedColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+    m_SelectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+    m_DisabledColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 0.5019608}
+    m_ColorMultiplier: 1
+    m_FadeDuration: 0.1
+  m_SpriteState:
+    m_HighlightedSprite: {fileID: 0}
+    m_PressedSprite: {fileID: 0}
+    m_SelectedSprite: {fileID: 0}
+    m_DisabledSprite: {fileID: 0}
+  m_AnimationTriggers:
+    m_NormalTrigger: Normal
+    m_HighlightedTrigger: Highlighted
+    m_PressedTrigger: Pressed
+    m_SelectedTrigger: Selected
+    m_DisabledTrigger: Disabled
+  m_Interactable: 1
+  m_TargetGraphic: {fileID: 424562364}
+  m_OnClick:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 1128615845}
+        m_TargetAssemblyTypeName: GameManager, Assembly-CSharp
+        m_MethodName: EndTurn
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+--- !u!114 &424562364
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 424562362}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  m_Type: 1
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &424562365
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 424562362}
+  m_CullTransparentMesh: 1
+--- !u!224 &424562366
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 424562362}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 257567706}
+  m_Father: {fileID: 1085869597}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 1, y: 0.5}
+  m_AnchorMax: {x: 1, y: 0.5}
+  m_AnchoredPosition: {x: -1920, y: -813.98}
+  m_SizeDelta: {x: 195.48853, y: 49.9625}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
@@ -2831,20 +3089,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 1
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &549410771
 BoxCollider2D:
@@ -3159,20 +3415,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &659330576
 BoxCollider2D:
@@ -3327,20 +3581,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &847300149
 BoxCollider2D:
@@ -3628,20 +3880,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &962596894
 BoxCollider2D:
@@ -3796,20 +4046,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &994671633
 BoxCollider2D:
@@ -4095,6 +4343,7 @@ RectTransform:
   - {fileID: 178884225}
   - {fileID: 1541138678}
   - {fileID: 85257174}
+  - {fileID: 424562366}
   - {fileID: 916066428}
   - {fileID: 1584052287}
   - {fileID: 2136744798}
@@ -4212,20 +4461,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 1
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &1095219494
 BoxCollider2D:
@@ -4303,25 +4550,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   player1: {fileID: 1207336706}
-  player2: {fileID: 1277085057}
   player1Tile: {fileID: 994671632}
+  player2: {fileID: 1277085057}
   player2Tile: {fileID: 994671632}
   finishTile: {fileID: 1095219493}
+  playerMovement: {fileID: 1207336707}
+  agility: 2
   diceText: {fileID: 98167584}
   turnText: {fileID: 29435795}
-  turnPanelImage: {fileID: 603807879}
-  player1PanelColor: {r: 0.05, g: 0.12, b: 0.3, a: 0.85}
-  player2PanelColor: {r: 0.05, g: 0.25, b: 0.12, a: 0.85}
-  panelTransitionDuration: 0.4
-  player1TurnColor: {r: 0.2, g: 0.6, b: 1, a: 1}
-  player2TurnColor: {r: 0.2, g: 0.85, b: 0.3, a: 1}
-  scoreP1Text: {fileID: 40403189}
-  scoreP2Text: {fileID: 178884223}
-  winText: {fileID: 138871350}
   player1InventoryText: {fileID: 40403189}
-  player2InventoryText: {fileID: 178884223}
+  winText: {fileID: 138871350}
+  scoreP1Text: {fileID: 40403189}
   diceImage: {fileID: 1541138680}
+  diceImage2: {fileID: 0}
   rollButton: {fileID: 1541138679}
+  endTurnButton: {fileID: 424562363}
   diceFaces:
   - {fileID: -640247301285870076, guid: c08bb42382e84ff49b1d725fb1000004, type: 3}
   - {fileID: -8418784005996166378, guid: 34d8fa6a801a3ab4ab098132693b19b9, type: 3}
@@ -4330,16 +4573,16 @@ MonoBehaviour:
   - {fileID: -9223130493960747880, guid: 56bdc2a727954ca41a9777363cfdf6fd, type: 3}
   - {fileID: -7465713121816197856, guid: 429badb32254a374e99f4b43f0369845, type: 3}
   diceAnimationDuration: 1.5
-  wallButton: {fileID: 85257175}
-  wallCountText: {fileID: 0}
-  wallDurationInTurns: 2
-  freezeButton: {fileID: 916066429}
-  freezeCountText: {fileID: 0}
-  frozenTurnMessageDuration: 2
+  turnPanelImage: {fileID: 603807879}
+  heroPanelColor: {r: 0.05, g: 0.12, b: 0.3, a: 0.85}
+  monsterPanelColor: {r: 0.25, g: 0.08, b: 0.08, a: 0.85}
+  panelTransitionDuration: 0.4
+  onMonsterTurnStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  autoCompleteMonsterPhaseWhenNoListener: 1
   startingPointBonuses: 4
-  startingWallBonuses: 1
-  startingFreezeBonuses: 1
-  moveDuration: 0.3
+  activeBadTilesCount: 2
   mainMenuSceneName: MainMenu
 --- !u!4 &1128615846
 Transform:
@@ -4463,20 +4706,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &1155837886
 BoxCollider2D:
@@ -4534,8 +4775,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1207336706}
   - component: {fileID: 1207336705}
+  - component: {fileID: 1207336707}
   m_Layer: 0
-  m_Name: Player1
+  m_Name: Warrior
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4609,12 +4851,30 @@ Transform:
   m_GameObject: {fileID: 1207336704}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5.49, y: -2.35, z: 0}
+  m_LocalPosition: {x: -3.52, y: -2.5, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1207336707
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1207336704}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c53c617617b7d314bafe9f864ea7589e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
+  warrior: {fileID: 1207336706}
+  currentTile: {fileID: 994671632}
+  gameManager: {fileID: 1128615845}
+  moveDuration: 0.3
+  availableMoveColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+  otherCharacters: []
 --- !u!1 &1258622281
 GameObject:
   m_ObjectHideFlags: 0
@@ -4859,20 +5119,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &1260366962
 BoxCollider2D:
@@ -5118,20 +5376,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 1
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &1301964365
 BoxCollider2D:
@@ -5286,20 +5542,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &1437147328
 BoxCollider2D:
@@ -6046,20 +6300,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &1819282924
 BoxCollider2D:
@@ -6214,20 +6466,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 1
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &1946768721
 BoxCollider2D:
@@ -6382,20 +6632,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   x: 0
   y: 0
+  movementCost: 2
   isBadTile: 0
   isFinishTile: 0
   hasItem: 0
   tileIndicatorText: {fileID: 0}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   pointsColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  wallBonusColor: {r: 0.1, g: 0.65, b: 1, a: 1}
-  freezeBonusColor: {r: 0.65, g: 0.25, b: 1, a: 1}
   wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   trapColor: {r: 1, g: 0, b: 0, a: 1}
   finishColor: {r: 0, g: 1, b: 0, a: 1}
   isRevealed: 0
   isWall: 0
-  wallTurnsRemaining: 0
   bonusType: 0
 --- !u!61 &2021026301
 BoxCollider2D:

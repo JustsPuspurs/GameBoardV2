@@ -35,7 +35,7 @@ public class Tile : MonoBehaviour, IPointerClickHandler
 
     [Header("Tile State")]
     [HideInInspector] public bool isRevealed = false;
-    [Tooltip("Blocks movement when enabled. This is a board obstacle, not a player ability.")]
+    [Tooltip("Blocks movement. This is a board obstacle, not a player ability.")]
     public bool isWall = false;
     [HideInInspector] public BonusType bonusType = BonusType.Points;
 
@@ -115,18 +115,14 @@ public class Tile : MonoBehaviour, IPointerClickHandler
         RefreshColor();
     }
 
-    /// <summary>
-    /// Sets a board obstacle. This does not create or activate a Wall ability.
-    /// </summary>
+    /// <summary>Sets a board obstacle. This does not activate a Wall ability.</summary>
     public void SetWall(bool blocked)
     {
         isWall = blocked;
         RefreshColor();
     }
 
-    /// <summary>
-    /// Updates the tile's appearance based on its current state.
-    /// </summary>
+    /// <summary>Updates the tile appearance based on its current state.</summary>
     public void RefreshColor()
     {
         if (spriteRenderer == null)
@@ -206,11 +202,9 @@ public class Tile : MonoBehaviour, IPointerClickHandler
         moveHighlightRenderer.numCapVertices = 2;
 
         Bounds bounds = spriteRenderer.sprite.bounds;
-        float width = bounds.size.x;
-        float height = bounds.size.y;
-        float insetX = width * 0.08f;
-        float insetY = height * 0.08f;
-        float lineWidth = Mathf.Min(width, height) * 0.05f;
+        float insetX = bounds.size.x * 0.08f;
+        float insetY = bounds.size.y * 0.08f;
+        float lineWidth = Mathf.Min(bounds.size.x, bounds.size.y) * 0.05f;
 
         moveHighlightRenderer.widthMultiplier = lineWidth;
         moveHighlightRenderer.SetPosition(0, new Vector3(bounds.min.x + insetX, bounds.min.y + insetY, -0.1f));
