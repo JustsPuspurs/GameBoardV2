@@ -11,6 +11,31 @@ public class CombatSystem : MonoBehaviour
     [SerializeField] private Tile warriorTile;
     [SerializeField] private Tile skeletonTile;
 
+    [Header("Skeleton Settings")]
+    [Min(1)]
+    [SerializeField] private int skeletonMoveRange = 3;
+
+    [Min(1)]
+    [SerializeField] private int skeletonDetectionRange = 3;
+    [Header("Respawn Settings")]
+    [Min(1)]
+    [SerializeField] private int skeletonRespawnDelay = 4;
+    [Header("Level Objective")]
+    [SerializeField] private GameObject artifact;
+    [SerializeField] private Tile artifactTile;
+    [SerializeField] private Tile exitTile;
+
+    private bool hasArtifact = false;
+    private bool hasWon = false;
+
+    public bool HasArtifact => hasArtifact;
+    public bool HasWon => hasWon;
+
+    private int skeletonDeadTurns = 0;
+
+    private SpriteRenderer skeletonRenderer;
+    private Color skeletonOriginalColor;
+
     private enum CombatTurn
     {
         Warrior,
@@ -21,20 +46,53 @@ public class CombatSystem : MonoBehaviour
     private CombatTurn currentTurn = CombatTurn.Warrior;
 
     private bool warriorHasAttacked = false;
+
     public bool CanWarriorAttack =>
         currentTurn == CombatTurn.Warrior &&
+        !warriorHasAttacked &&
+        warrior != null &&
+        skeleton != null &&
+        !warrior.IsDead &&
+        !skeleton.IsDead &&
+        warriorTile != null &&
+        skeletonTile != null &&
+        GetDistance(warriorTile, skeletonTile) == 1;
+    public bool IsCombatFinished =>
+        currentTurn == CombatTurn.Finished;
+
+    public bool CanWarriorMove =>
+        currentTurn == CombatTurn.Warrior &&
+        warrior != null &&
+        !warrior.IsDead &&
         !warriorHasAttacked;
 
     private void Start()
     {
         currentTurn = CombatTurn.Warrior;
         warriorHasAttacked = false;
+        skeletonDeadTurns = 0;
+
+        if (skeleton != null)
+        {
+            skeletonRenderer =
+                skeleton.GetComponent<SpriteRenderer>();
+
+            if (skeletonRenderer != null)
+            {
+                skeletonOriginalColor = skeletonRenderer.color;
+            }
+        }
 
         MoveUnitToTile(warrior, warriorTile);
         MoveUnitToTile(skeleton, skeletonTile);
 
-        Debug.Log("Combat started!");
+        Debug.Log("Combat system ready!");
         Debug.Log("WARRIOR TURN!");
+        CheckArtifactPickup();
+
+        TryStartCombatAutomatically();
+
+        CheckLevelVictory();
     }
 
     // ==============================
@@ -44,42 +102,15 @@ public class CombatSystem : MonoBehaviour
     public void WarriorAttack()
     {
         if (!Application.isPlaying)
+            return;
+
+        if (!CanWarriorAttack)
         {
-            Debug.LogWarning("Start the game first!");
+            Debug.LogWarning("Warrior cannot attack now!");
             return;
         }
 
-        if (currentTurn != CombatTurn.Warrior)
-        {
-            Debug.LogWarning("It is not Warrior's turn!");
-            return;
-        }
-
-        if (warriorHasAttacked)
-        {
-            Debug.LogWarning(
-                "Warrior has already attacked this turn!"
-            );
-
-            return;
-        }
-
-        if (!TryAttack(warrior, skeleton))
-        {
-            return;
-        }
-
-        warriorHasAttacked = true;
-
-        if (skeleton.IsDead)
-        {
-            currentTurn = CombatTurn.Finished;
-
-            Debug.Log("WARRIOR WINS!");
-            return;
-        }
-
-        Debug.Log("Warrior attack used! End your turn.");
+        ResolveCombatRound();
     }
 
     // ==============================
@@ -89,42 +120,31 @@ public class CombatSystem : MonoBehaviour
     public void EndWarriorTurn()
     {
         if (!Application.isPlaying)
-        {
-            Debug.LogWarning("Start the game first!");
             return;
-        }
 
         if (currentTurn != CombatTurn.Warrior)
-        {
-            Debug.LogWarning("Cannot end Warrior turn!");
             return;
-        }
 
         if (warrior == null || skeleton == null)
-        {
-            Debug.LogError("Combat participants are missing!");
             return;
-        }
 
         currentTurn = CombatTurn.Skeleton;
 
         Debug.Log("SKELETON TURN!");
 
-        PerformSkeletonTurn();
+        if (!warriorHasAttacked && !skeleton.IsDead)
+        {
+            PerformSkeletonTurn();
+        }
+
+        if (currentTurn == CombatTurn.Finished)
+            return;
 
         if (warrior.IsDead)
         {
             currentTurn = CombatTurn.Finished;
 
-            Debug.Log("SKELETON WINS!");
-            return;
-        }
-
-        if (skeleton.IsDead)
-        {
-            currentTurn = CombatTurn.Finished;
-
-            Debug.Log("WARRIOR WINS!");
+            Debug.Log("GAME OVER!");
             return;
         }
 
@@ -132,6 +152,8 @@ public class CombatSystem : MonoBehaviour
         warriorHasAttacked = false;
 
         Debug.Log("WARRIOR TURN!");
+
+        UpdateSkeletonRespawn();
     }
 
     // ==============================
@@ -147,30 +169,45 @@ public class CombatSystem : MonoBehaviour
         }
 
         if (skeleton.IsDead || warrior.IsDead)
+            return;
+        if (!CanSkeletonSeeWarrior())
         {
+            Debug.Log("Skeleton cannot see Warrior. Staying idle.");
             return;
         }
 
-        // Attack if Warrior is already adjacent
+        Debug.Log("Skeleton detected Warrior!");
+
+        // Attack immediately if adjacent
         if (GetDistance(skeletonTile, warriorTile) == 1)
         {
             SkeletonAttack();
             return;
         }
 
-        // Find the next tile towards Warrior
-        Tile nextTile = FindNextSkeletonTile();
+        int stepsMoved = 0;
 
-        if (nextTile != null)
+        // Move up to the maximum movement range
+        for (int i = 0; i < skeletonMoveRange; i++)
         {
+            if (GetDistance(skeletonTile, warriorTile) == 1)
+                break;
+
+            Tile nextTile = FindNextSkeletonTile();
+
+            if (nextTile == null)
+            {
+                Debug.Log("Skeleton cannot find a path!");
+                break;
+            }
             MoveSkeleton(nextTile);
-        }
-        else
-        {
-            Debug.Log("Skeleton cannot find a path!");
+
+            stepsMoved++;
         }
 
-        // Attack after movement if possible
+        Debug.Log($"Skeleton moved {stepsMoved} tile(s).");
+
+        // Attack after movement if adjacent
         if (GetDistance(skeletonTile, warriorTile) == 1)
         {
             SkeletonAttack();
@@ -180,9 +217,107 @@ public class CombatSystem : MonoBehaviour
             Debug.Log("Skeleton is still too far to attack.");
         }
     }
+
     // ==============================
     // SKELETON MOVEMENT - BFS
     // ==============================
+    private bool CanSkeletonSeeWarrior()
+{
+    if (skeletonTile == null || warriorTile == null)
+        return false;
+
+    int dx = Mathf.Abs(warriorTile.x - skeletonTile.x);
+    int dy = Mathf.Abs(warriorTile.y - skeletonTile.y);
+
+    if (Mathf.Max(dx, dy) > skeletonDetectionRange)
+        return false;
+
+    return HasLineOfSight(skeletonTile, warriorTile);
+}
+
+private bool HasLineOfSight(Tile from, Tile to)
+{
+    Tile[] allTiles = FindObjectsByType<Tile>(
+        FindObjectsSortMode.None
+    );
+
+    Dictionary<Vector2Int, Tile> tileMap =
+        new Dictionary<Vector2Int, Tile>();
+
+    foreach (Tile tile in allTiles)
+    {
+        if (tile.gameObject.scene != gameObject.scene)
+            continue;
+
+        Vector2Int position = new Vector2Int(tile.x, tile.y);
+
+        if (tileMap.ContainsKey(position))
+            return false;
+
+        tileMap.Add(position, tile);
+    }
+
+    int x = from.x;
+    int y = from.y;
+
+    int dx = Mathf.Abs(to.x - from.x);
+    int dy = Mathf.Abs(to.y - from.y);
+
+    int stepX = to.x > from.x ? 1 : -1;
+    int stepY = to.y > from.y ? 1 : -1;
+
+    int ix = 0;
+    int iy = 0;
+
+    while (ix < dx || iy < dy)
+    {
+        int horizontal = (1 + 2 * ix) * dy;
+        int vertical = (1 + 2 * iy) * dx;
+
+        if (horizontal == vertical)
+        {
+            if (IsVisionBlocked(tileMap, x + stepX, y) ||
+                IsVisionBlocked(tileMap, x, y + stepY))
+            {
+                return false;
+            }
+
+            x += stepX;
+            y += stepY;
+            ix++;
+            iy++;
+        }
+        else if (horizontal < vertical)
+        {
+            x += stepX;
+            ix++;
+        }
+        else
+        {
+            y += stepY;
+            iy++;
+        }
+
+        if (IsVisionBlocked(tileMap, x, y))
+            return false;
+    }
+
+    return true;
+}
+
+private bool IsVisionBlocked(
+    Dictionary<Vector2Int, Tile> tileMap,
+    int x,
+    int y)
+{
+    if (!tileMap.TryGetValue(
+        new Vector2Int(x, y), out Tile tile))
+    {
+        return true;
+    }
+
+    return tile.isWall;
+}
 
     private Tile FindNextSkeletonTile()
     {
@@ -198,7 +333,8 @@ public class CombatSystem : MonoBehaviour
             if (tile.gameObject.scene != gameObject.scene)
                 continue;
 
-            Vector2Int position = new Vector2Int(tile.x, tile.y);
+            Vector2Int position =
+                new Vector2Int(tile.x, tile.y);
 
             if (tileMap.ContainsKey(position))
             {
@@ -234,7 +370,6 @@ public class CombatSystem : MonoBehaviour
         {
             Tile currentTile = queue.Dequeue();
 
-            // Find a tile adjacent to Warrior
             if (GetDistance(currentTile, warriorTile) == 1)
             {
                 Tile step = currentTile;
@@ -256,7 +391,7 @@ public class CombatSystem : MonoBehaviour
                 );
 
                 if (!tileMap.TryGetValue(
-                        nextPosition, out Tile neighbor))
+                    nextPosition, out Tile neighbor))
                 {
                     continue;
                 }
@@ -321,20 +456,298 @@ public class CombatSystem : MonoBehaviour
     // ==============================
 
     public void SkeletonAttack()
+{
+    if (!Application.isPlaying ||
+        currentTurn != CombatTurn.Skeleton)
+        return;
+
+    ResolveCombatRound();
+}
+    private void TryStartCombatAutomatically()
     {
-        if (!Application.isPlaying ||
-            currentTurn != CombatTurn.Skeleton)
+        if (currentTurn == CombatTurn.Finished)
+            return;
+
+        if (warrior == null || skeleton == null)
+            return;
+
+        if (warrior.IsDead || skeleton.IsDead)
+            return;
+
+        if (warriorTile == null || skeletonTile == null)
+            return;
+
+        if (warriorHasAttacked)
+            return;
+
+        if (GetDistance(warriorTile, skeletonTile) == 1)
         {
-            Debug.LogWarning("It is not Skeleton's turn!");
+            Debug.Log("COMBAT STARTED AUTOMATICALLY!");
+
+            ResolveCombatRound();
+        }
+    }
+    private void CheckLevelVictory()
+    {
+        if (currentTurn == CombatTurn.Finished)
+            return;
+
+        if (warrior == null || warrior.IsDead)
+            return;
+
+        if (warriorTile == null || exitTile == null)
+            return;
+
+        if (warriorTile != exitTile)
+            return;
+
+        if (!hasArtifact)
+        {
+            Debug.Log("EXIT LOCKED! Find the artifact first.");
             return;
         }
 
-        TryAttack(skeleton, warrior);
+        hasWon = true;
+        currentTurn = CombatTurn.Finished;
+
+        Debug.Log("ARTIFACT DELIVERED!");
+        Debug.Log("VICTORY! LEVEL COMPLETED!");
     }
+    private void CheckArtifactPickup()
+    {
+        if (hasArtifact)
+            return;
+
+        if (warrior == null || warrior.IsDead)
+            return;
+
+        if (warriorTile == null || artifactTile == null)
+            return;
+
+        if (warriorTile == artifactTile)
+        {
+            hasArtifact = true;
+
+            if (artifact != null)
+            {
+                artifact.SetActive(false);
+            }
+
+            Debug.Log("ARTIFACT COLLECTED!");
+            Debug.Log("Find the exit!");
+        }
+    }
+    public void NotifyWarriorMoved(Tile newTile)
+    {
+        if (!CanWarriorMove)
+        {
+            Debug.Log("Warrior movement is blocked!");
+            return;
+        }
+
+        if (newTile == null || newTile.isWall)
+            return;
+
+        if (newTile == skeletonTile &&
+            skeleton != null &&
+            !skeleton.IsDead)
+        {
+            return;
+        }
+
+        warriorTile = newTile;
+
+        CheckArtifactPickup();
+
+        TryStartCombatAutomatically();
+
+        CheckLevelVictory();
+    }
+    private void HandleSkeletonDeath()
+    {
+        skeletonDeadTurns = 0;
+
+        if (skeletonRenderer != null)
+        {
+            skeletonRenderer.color = Color.gray;
+        }
+
+        Debug.Log("Skeleton defeated!");
+        Debug.Log("Skeleton will respawn in 4 turns.");
+    }
+
+    private void UpdateSkeletonRespawn()
+    {
+        if (skeleton == null || !skeleton.IsDead)
+            return;
+
+        skeletonDeadTurns++;
+
+        Debug.Log(
+            $"Skeleton respawn: {skeletonDeadTurns}/{skeletonRespawnDelay}"
+        );
+
+        if (skeletonDeadTurns == skeletonRespawnDelay - 1)
+        {
+            if (skeletonRenderer != null)
+            {
+                skeletonRenderer.color =
+                    new Color(0.6f, 0.1f, 1f);
+            }
+
+            Debug.Log("Skeleton eyes are glowing purple!");
+        }
+
+        if (skeletonDeadTurns >= skeletonRespawnDelay)
+        {
+            if (warriorTile == skeletonTile)
+            {
+                Debug.Log("Respawn delayed: tile is occupied.");
+                return;
+            }
+
+            skeleton.Respawn();
+
+            skeletonDeadTurns = 0;
+
+            if (skeletonRenderer != null)
+            {
+                skeletonRenderer.color = skeletonOriginalColor;
+            }
+
+            TryStartCombatAutomatically();
+        }
+    }
+
+private void ResolveCombatRound()
+{
+    if (warrior == null || skeleton == null)
+        return;
+
+    if (warriorTile == null || skeletonTile == null)
+        return;
+
+    if (warrior.IsDead || skeleton.IsDead)
+        return;
+
+    if (warriorHasAttacked)
+        return;
+
+    if (GetDistance(warriorTile, skeletonTile) != 1)
+    {
+        Debug.Log("Characters are not adjacent!");
+        return;
+    }
+
+    warriorHasAttacked = true;
+
+    Debug.Log("COMBAT ROUND STARTED!");
+
+    // Equal initiative
+    if (warrior.agility == skeleton.agility)
+    {
+        Debug.Log("SIMULTANEOUS ATTACK!");
+
+        int warriorDamage = CalculateDamage(
+            warrior, skeleton
+        );
+
+        int skeletonDamage = CalculateDamage(
+            skeleton, warrior
+        );
+
+        skeleton.TakeDamage(warriorDamage);
+        warrior.TakeDamage(skeletonDamage);
+    }
+
+    // Warrior attacks first
+    else if (warrior.agility > skeleton.agility)
+    {
+        Debug.Log("Warrior has initiative!");
+
+        skeleton.TakeDamage(
+            CalculateDamage(warrior, skeleton)
+        );
+
+        if (!skeleton.IsDead)
+        {
+            warrior.TakeDamage(
+                CalculateDamage(skeleton, warrior)
+            );
+        }
+    }
+
+    // Skeleton attacks first
+    else
+    {
+        Debug.Log("Skeleton has initiative!");
+
+        warrior.TakeDamage(
+            CalculateDamage(skeleton, warrior)
+        );
+
+        if (!warrior.IsDead)
+        {
+            skeleton.TakeDamage(
+                CalculateDamage(warrior, skeleton)
+            );
+        }
+    }
+
+    // Combat result
+    if (warrior.IsDead && skeleton.IsDead)
+    {
+        currentTurn = CombatTurn.Finished;
+        Debug.Log("DRAW! Both characters defeated!");
+    }
+    else if (skeleton.IsDead)
+    {
+        HandleSkeletonDeath();
+    }
+    else if (warrior.IsDead)
+    {
+        currentTurn = CombatTurn.Finished;
+        Debug.Log("SKELETON WINS!");
+    }
+    else
+    {
+        Debug.Log("Combat round finished!");
+    }
+}
+
+private int CalculateDamage(
+    CombatUnit attacker,
+    CombatUnit defender)
+{
+    int totalRoll = 0;
+
+    for (int i = 0; i < attacker.strength; i++)
+    {
+        int diceRoll = Random.Range(1, 7);
+
+        totalRoll += diceRoll;
+
+        Debug.Log(
+            $"{attacker.unitName} rolled D6: {diceRoll}"
+        );
+    }
+
+    int damage = Mathf.Max(
+        0,
+        totalRoll - defender.shield
+    );
+
+    Debug.Log(
+        $"{attacker.unitName} deals {damage} damage!"
+    );
+
+    return damage;
+}
 
     // ==============================
     // ATTACK CALCULATION
     // ==============================
+
     private bool TryAttack(
         CombatUnit attacker,
         CombatUnit defender)

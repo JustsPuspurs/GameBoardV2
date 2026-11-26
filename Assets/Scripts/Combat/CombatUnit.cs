@@ -9,6 +9,7 @@ public class CombatUnit : MonoBehaviour
     [Min(1)] public int maxHealth = 20;
     [Min(0)] public int strength = 3;
     [Min(0)] public int shield = 2;
+    [Min(1)] public int agility = 2;
 
     [Header("Current Status")]
     [SerializeField] private int currentHealth;
@@ -37,6 +38,13 @@ public class CombatUnit : MonoBehaviour
         {
             Die();
         }
+    }
+    public void Respawn()
+    {
+        currentHealth = maxHealth;
+
+        Debug.Log($"{unitName} has respawned!");
+        Debug.Log($"{unitName} HP: {currentHealth}/{maxHealth}");
     }
 
     private void Die()

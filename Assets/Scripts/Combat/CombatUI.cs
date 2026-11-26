@@ -6,6 +6,7 @@ public class CombatUI : MonoBehaviour
 {
     [Header("Combat System")]
     [SerializeField] private CombatSystem combatSystem;
+
     [Header("Characters")]
     [SerializeField] private CombatUnit warrior;
     [SerializeField] private CombatUnit skeleton;
@@ -24,11 +25,10 @@ public class CombatUI : MonoBehaviour
     [Header("Result Colors")]
     [SerializeField] private Color victoryColor = Color.yellow;
     [SerializeField] private Color defeatColor = Color.red;
+    [SerializeField] private Color respawnColor = Color.magenta;
 
     private int lastWarriorHP = -1;
     private int lastSkeletonHP = -1;
-
-    private bool combatFinished = false;
 
     private void Start()
     {
@@ -46,15 +46,11 @@ public class CombatUI : MonoBehaviour
             return;
         }
 
-        combatFinished = false;
-
         combatResultText.gameObject.SetActive(false);
 
-        attackButton.interactable = true;
-        endTurnButton.interactable = true;
-
         UpdateHealthUI();
-        CheckCombatResult();
+        UpdateCombatStatus();
+        UpdateButtons();
     }
 
     private void Update()
@@ -65,16 +61,8 @@ public class CombatUI : MonoBehaviour
             UpdateHealthUI();
         }
 
-        if (!combatFinished)
-        {
-            CheckCombatResult();
-        }
-
-        if (!combatFinished)
-        {
-            attackButton.interactable =
-                combatSystem.CanWarriorAttack;
-        }
+        UpdateCombatStatus();
+        UpdateButtons();
     }
 
     // ==============================
@@ -94,31 +82,62 @@ public class CombatUI : MonoBehaviour
     }
 
     // ==============================
-    // COMBAT RESULT
+    // COMBAT STATUS
     // ==============================
 
-    private void CheckCombatResult()
+    private void UpdateCombatStatus()
     {
-        if (warrior.IsDead)
+        if (combatSystem.HasWon)
         {
-            ShowCombatResult("DEFEAT!", defeatColor);
+            ShowStatus("VICTORY!", victoryColor);
+        }
+        else if (warrior.IsDead && skeleton.IsDead)
+        {
+            ShowStatus("DRAW!", Color.white);
+        }
+        else if (warrior.IsDead)
+        {
+            ShowStatus("DEFEAT!", defeatColor);
         }
         else if (skeleton.IsDead)
         {
-            ShowCombatResult("VICTORY!", victoryColor);
+            ShowStatus(
+                "SKELETON RESPAWNING...",
+                respawnColor
+            );
+        }
+        else
+        {
+            combatResultText.gameObject.SetActive(false);
         }
     }
 
-    private void ShowCombatResult(string result, Color color)
-    {
-        combatFinished = true;
+    // ==============================
+    // BUTTONS
+    // ==============================
 
-        combatResultText.text = result;
+    private void UpdateButtons()
+    {
+        bool gameFinished =
+            combatSystem.IsCombatFinished || warrior.IsDead;
+
+        attackButton.interactable =
+            !gameFinished &&
+            !skeleton.IsDead &&
+            combatSystem.CanWarriorAttack;
+
+        endTurnButton.interactable = !gameFinished;
+    }
+
+    // ==============================
+    // STATUS MESSAGE
+    // ==============================
+
+    private void ShowStatus(string message, Color color)
+    {
+        combatResultText.text = message;
         combatResultText.color = color;
 
         combatResultText.gameObject.SetActive(true);
-
-        attackButton.interactable = false;
-        endTurnButton.interactable = false;
     }
 }
