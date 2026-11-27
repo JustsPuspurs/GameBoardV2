@@ -20,7 +20,6 @@ public class CombatUI : MonoBehaviour
 
     [Header("Combat Buttons")]
     [SerializeField] private Button attackButton;
-    [SerializeField] private Button endTurnButton;
 
     [Header("Result Colors")]
     [SerializeField] private Color victoryColor = Color.yellow;
@@ -38,8 +37,7 @@ public class CombatUI : MonoBehaviour
             warriorHPText == null ||
             skeletonHPText == null ||
             combatResultText == null ||
-            attackButton == null ||
-            endTurnButton == null)
+            attackButton == null)
         {
             Debug.LogError("CombatUI: Missing references!");
             enabled = false;
@@ -91,15 +89,11 @@ public class CombatUI : MonoBehaviour
         {
             ShowStatus("VICTORY!", victoryColor);
         }
-        else if (warrior.IsDead && skeleton.IsDead)
-        {
-            ShowStatus("DRAW!", Color.white);
-        }
         else if (warrior.IsDead)
         {
-            ShowStatus("DEFEAT!", defeatColor);
+            ShowStatus("YOU LOSE", defeatColor);
         }
-        else if (skeleton.IsDead)
+        else if (combatSystem.Opponent != null && combatSystem.Opponent.IsDead)
         {
             ShowStatus(
                 "SKELETON RESPAWNING...",
@@ -118,15 +112,7 @@ public class CombatUI : MonoBehaviour
 
     private void UpdateButtons()
     {
-        bool gameFinished =
-            combatSystem.IsCombatFinished || warrior.IsDead;
-
-        attackButton.interactable =
-            !gameFinished &&
-            !skeleton.IsDead &&
-            combatSystem.CanWarriorAttack;
-
-        endTurnButton.interactable = !gameFinished;
+        attackButton.interactable = combatSystem.CanWarriorAttack;
     }
 
     // ==============================

@@ -776,7 +776,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7935568346533511101, guid: 589e6d3ff2d7d304aa0c727d69e355a9, type: 3}
       propertyPath: m_text
-      value: "1. Roll one D6 per Agility to gain movement points. Move between cells that share an edge. Most cells cost 1 point, rough ground costs 2.\n\n2. Stop next to the Skeleton to fight. End Turn lets the Skeleton act.\n\n3. Collect the artefact and reach the exit to win. At 0 HP, restart to try again."
+      value: "1. Roll one D6 per Agility to gain movement points. Move between cells that share an edge. Most cells cost 1 point, rough ground costs 2.\n\n2. Stop next to a Skeleton, then choose Fight. End Turn lets the Skeletons act.\n\n3. Collect the artefact and reach the exit to win. At 0 HP, restart to try again."
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

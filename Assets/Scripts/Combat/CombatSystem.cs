@@ -1,868 +1,314 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class CombatSystem : MonoBehaviour
 {
-    [Header("Combat Participants")]
     [SerializeField] private CombatUnit warrior;
     [SerializeField] private CombatUnit skeleton;
-
-    [Header("Character Positions")]
+    [SerializeField] private CombatUnit secondSkeleton;
     [SerializeField] private Tile warriorTile;
     [SerializeField] private Tile skeletonTile;
-
-    [Header("Skeleton Settings")]
-    [Min(1)]
-    [SerializeField] private int skeletonMoveRange = 3;
-
-    [Min(1)]
-    [SerializeField] private int skeletonDetectionRange = 3;
-    [Header("Respawn Settings")]
-    [Min(1)]
-    [SerializeField] private int skeletonRespawnDelay = 4;
-    [Header("Level Objective")]
+    [SerializeField] private Tile secondSkeletonTile;
+    [SerializeField, Min(1)] private int skeletonMoveRange = 3;
+    [SerializeField, Min(1)] private int skeletonDetectionRange = 3;
+    [SerializeField, Min(1)] private int skeletonRespawnDelay = 4;
     [SerializeField] private GameObject artifact;
     [SerializeField] private Tile artifactTile;
     [SerializeField] private Tile exitTile;
 
-    private bool hasArtifact = false;
-    private bool hasWon = false;
+    private const float FightDuration = 3f;
+    private static readonly Vector2Int[] Directions =
+        { Vector2Int.up, Vector2Int.left, Vector2Int.down, Vector2Int.right };
 
-    public bool HasArtifact => hasArtifact;
-    public bool HasWon => hasWon;
-    public bool IsAtLockedExit => warriorTile == exitTile && !hasArtifact;
-    public CombatUnit Warrior => warrior;
-    public CombatUnit Opponent => skeleton;
-    public bool IsInMelee => warrior != null && skeleton != null && !warrior.IsDead && !skeleton.IsDead
-        && warriorTile != null && skeletonTile != null && GetDistance(warriorTile, skeletonTile) == 1;
-
-    private DungeonHud dungeonHud;
-
-    public void AttachHud(DungeonHud hud) => dungeonHud = hud;
-
-    public bool IsOccupiedByOpponent(Tile tile) =>
-        tile == skeletonTile && skeleton != null && !skeleton.IsDead;
-
-    private int skeletonDeadTurns = 0;
-
-    private SpriteRenderer skeletonRenderer;
-    private Color skeletonOriginalColor;
-
-    private enum CombatTurn
+    private sealed class Enemy
     {
-        Warrior,
-        Skeleton,
-        Finished
+        public readonly CombatUnit Unit;
+        public readonly SpriteRenderer Renderer;
+        public readonly Color OriginalColor;
+        public Tile Tile;
+        public int RespawnOnTurn;
+
+        public Enemy(CombatUnit unit, Tile tile)
+        {
+            Unit = unit;
+            Tile = tile;
+            Renderer = unit.GetComponent<SpriteRenderer>();
+            OriginalColor = Renderer != null ? Renderer.color : Color.white;
+            Unit.transform.position = tile.transform.position;
+        }
     }
 
-    private CombatTurn currentTurn = CombatTurn.Warrior;
+    private readonly List<Enemy> enemies = new();
+    private readonly Dictionary<Vector2Int, Tile> board = new();
+    private DungeonHud dungeonHud;
+    private Enemy pendingEnemy;
+    private Enemy displayedEnemy;
+    private Enemy foughtDuringWarriorTurn;
+    private bool resolving;
+    private bool runningEnemyTurn;
+    private bool warriorHasFought;
 
-    private bool warriorHasAttacked = false;
-
-    public bool CanWarriorAttack =>
-        currentTurn == CombatTurn.Warrior &&
-        !warriorHasAttacked &&
-        warrior != null &&
-        skeleton != null &&
-        !warrior.IsDead &&
-        !skeleton.IsDead &&
-        warriorTile != null &&
-        skeletonTile != null &&
-        GetDistance(warriorTile, skeletonTile) == 1;
-    public bool IsCombatFinished =>
-        currentTurn == CombatTurn.Finished;
-
-    public bool CanWarriorMove =>
-        currentTurn == CombatTurn.Warrior &&
-        warrior != null &&
-        !warrior.IsDead &&
-        !warriorHasAttacked;
+    public int TurnNumber { get; private set; } = 1;
+    public bool HasArtifact { get; private set; }
+    public bool HasWon { get; private set; }
+    public bool IsAtLockedExit => warriorTile == exitTile && !HasArtifact;
+    public CombatUnit Warrior => warrior;
+    public CombatUnit Opponent => displayedEnemy?.Unit;
+    public bool IsMonsterTurn => runningEnemyTurn;
+    public bool IsCombatFinished => HasWon || warrior.IsDead;
+    public bool HasPendingFight => pendingEnemy != null && !IsCombatFinished;
+    public bool IsRollingFight => resolving;
+    public bool CanWarriorAttack => HasPendingFight && !resolving;
+    public bool CanEndWarriorTurn => !IsCombatFinished && !runningEnemyTurn && !HasPendingFight;
+    public bool CanWarriorMove => CanEndWarriorTurn && !warriorHasFought;
 
     private void Start()
     {
-        currentTurn = CombatTurn.Warrior;
-        warriorHasAttacked = false;
-        skeletonDeadTurns = 0;
-
-        if (skeleton != null)
+        foreach (Tile tile in FindObjectsByType<Tile>(FindObjectsSortMode.None))
         {
-            skeletonRenderer =
-                skeleton.GetComponent<SpriteRenderer>();
-
-            if (skeletonRenderer != null)
-            {
-                skeletonOriginalColor = skeletonRenderer.color;
-            }
+            if (tile.gameObject.scene == gameObject.scene)
+                board.Add(Cell(tile), tile);
         }
 
-        MoveUnitToTile(warrior, warriorTile);
-        MoveUnitToTile(skeleton, skeletonTile);
+        if (skeleton != null && skeletonTile != null)
+            enemies.Add(new Enemy(skeleton, skeletonTile));
+        if (secondSkeleton != null && secondSkeletonTile != null)
+            enemies.Add(new Enemy(secondSkeleton, secondSkeletonTile));
 
-        Debug.Log("Combat system ready!");
-        Debug.Log("WARRIOR TURN!");
-        CheckArtifactPickup();
-
-        TryStartCombatAutomatically();
-
-        CheckLevelVictory();
+        warrior.transform.position = warriorTile.transform.position;
+        CheckWarriorTile();
     }
 
-    // ==============================
-    // WARRIOR ATTACK
-    // ==============================
+    public void AttachHud(DungeonHud hud) => dungeonHud = hud;
+
+    public bool IsOccupiedByOpponent(Tile tile)
+    {
+        foreach (Enemy enemy in enemies)
+        {
+            if (enemy.Tile == tile && !enemy.Unit.IsDead)
+                return true;
+        }
+        return false;
+    }
+
+    public void NotifyWarriorMoved(Tile newTile)
+    {
+        if (!CanWarriorMove || newTile == null || newTile.isWall || IsOccupiedByOpponent(newTile))
+            return;
+
+        warriorTile = newTile;
+        CheckWarriorTile();
+    }
+
+    private void CheckWarriorTile()
+    {
+        if (warriorTile == artifactTile && !HasArtifact)
+        {
+            HasArtifact = true;
+            if (artifact != null)
+                artifact.SetActive(false);
+        }
+
+        foreach (Enemy enemy in enemies)
+        {
+            if (!enemy.Unit.IsDead && Distance(enemy.Tile, warriorTile) == 1)
+            {
+                BeginFight(enemy);
+                return;
+            }
+        }
+        CheckVictory();
+    }
+
+    private void CheckVictory()
+    {
+        if (!warrior.IsDead && warriorTile == exitTile && HasArtifact)
+            HasWon = true;
+    }
+
+    private void BeginFight(Enemy enemy)
+    {
+        pendingEnemy = enemy;
+        displayedEnemy = enemy;
+        dungeonHud?.BeginCombatRound();
+    }
 
     public void WarriorAttack()
     {
-        if (!Application.isPlaying)
-            return;
-
-        if (!CanWarriorAttack)
-        {
-            Debug.LogWarning("Warrior cannot attack now!");
-            return;
-        }
-
-        ResolveCombatRound();
+        if (CanWarriorAttack)
+            StartCoroutine(ResolveFight(pendingEnemy));
     }
 
-    // ==============================
-    // END WARRIOR TURN
-    // ==============================
+    private IEnumerator ResolveFight(Enemy enemy)
+    {
+        resolving = true;
+        int[] warriorRoll = Roll(warrior.Strength, out int warriorTotal);
+        int[] enemyRoll = Roll(enemy.Unit.Strength, out int enemyTotal);
+        if (dungeonHud != null)
+            yield return dungeonHud.AnimateFight(warriorRoll, enemyRoll, FightDuration);
+        else
+            yield return new WaitForSeconds(FightDuration);
+
+        int damageToEnemy = Mathf.Max(0, warriorTotal - enemy.Unit.Armor);
+        int damageToWarrior = Mathf.Max(0, enemyTotal - warrior.Armor);
+        if (warrior.Agility >= enemy.Unit.Agility)
+            enemy.Unit.TakeDamage(damageToEnemy);
+        if (warrior.Agility <= enemy.Unit.Agility || !enemy.Unit.IsDead)
+            warrior.TakeDamage(damageToWarrior);
+        if (warrior.Agility < enemy.Unit.Agility && !warrior.IsDead)
+            enemy.Unit.TakeDamage(damageToEnemy);
+
+        if (enemy.Unit.IsDead)
+        {
+            enemy.RespawnOnTurn = TurnNumber + skeletonRespawnDelay;
+            if (enemy.Renderer != null)
+                enemy.Renderer.color = Color.gray;
+        }
+
+        if (!runningEnemyTurn)
+        {
+            foughtDuringWarriorTurn = enemy;
+            warriorHasFought = true;
+            CheckVictory();
+        }
+
+        pendingEnemy = null;
+        resolving = false;
+    }
+
+    private static int[] Roll(int count, out int total)
+    {
+        var results = new int[count];
+        total = 0;
+        for (int i = 0; i < count; i++)
+        {
+            results[i] = Random.Range(1, 7);
+            total += results[i];
+        }
+        return results;
+    }
 
     public void EndWarriorTurn()
     {
-        if (!Application.isPlaying)
-            return;
-
-        if (currentTurn != CombatTurn.Warrior)
-            return;
-
-        if (warrior == null || skeleton == null)
-            return;
-
-        currentTurn = CombatTurn.Skeleton;
-
-        Debug.Log("SKELETON TURN!");
-
-        if (!warriorHasAttacked && !skeleton.IsDead)
-        {
-            PerformSkeletonTurn();
-        }
-
-        if (currentTurn == CombatTurn.Finished)
-            return;
-
-        if (warrior.IsDead)
-        {
-            currentTurn = CombatTurn.Finished;
-
-            Debug.Log("GAME OVER!");
-            return;
-        }
-
-        currentTurn = CombatTurn.Warrior;
-        warriorHasAttacked = false;
-
-        Debug.Log("WARRIOR TURN!");
-
-        UpdateSkeletonRespawn();
+        if (CanEndWarriorTurn)
+            StartCoroutine(RunEnemyTurn());
     }
 
-    // ==============================
-    // SKELETON AI
-    // ==============================
-
-    private void PerformSkeletonTurn()
+    private IEnumerator RunEnemyTurn()
     {
-        if (warriorTile == null || skeletonTile == null)
+        runningEnemyTurn = true;
+        yield return null;
+        foreach (Enemy enemy in enemies)
         {
-            Debug.LogWarning("Combat tiles are not assigned!");
-            return;
-        }
-
-        if (skeleton.IsDead || warrior.IsDead)
-            return;
-        if (!CanSkeletonSeeWarrior())
-        {
-            Debug.Log("Skeleton cannot see Warrior. Staying idle.");
-            return;
-        }
-
-        Debug.Log("Skeleton detected Warrior!");
-
-        // Attack immediately if adjacent
-        if (GetDistance(skeletonTile, warriorTile) == 1)
-        {
-            SkeletonAttack();
-            return;
-        }
-
-        int stepsMoved = 0;
-
-        // Move up to the maximum movement range
-        for (int i = 0; i < skeletonMoveRange; i++)
-        {
-            if (GetDistance(skeletonTile, warriorTile) == 1)
+            if (IsCombatFinished)
                 break;
+            if (enemy.Unit.IsDead || enemy == foughtDuringWarriorTurn)
+                continue;
 
-            Tile nextTile = FindNextSkeletonTile();
-
-            if (nextTile == null)
+            if (CanSeeWarrior(enemy.Tile))
             {
-                Debug.Log("Skeleton cannot find a path!");
-                break;
+                for (int i = 0; i < skeletonMoveRange && Distance(enemy.Tile, warriorTile) > 1; i++)
+                {
+                    Tile next = FindNextTile(enemy.Tile);
+                    if (next == null)
+                        break;
+
+                    enemy.Tile = next;
+                    enemy.Unit.transform.position = next.transform.position;
+                    yield return new WaitForSeconds(0.12f);
+                }
             }
-            MoveSkeleton(nextTile);
 
-            stepsMoved++;
+            if (Distance(enemy.Tile, warriorTile) == 1)
+            {
+                BeginFight(enemy);
+                while (pendingEnemy != null && !IsCombatFinished)
+                    yield return null;
+            }
         }
 
-        Debug.Log($"Skeleton moved {stepsMoved} tile(s).");
-
-        // Attack after movement if adjacent
-        if (GetDistance(skeletonTile, warriorTile) == 1)
+        if (!IsCombatFinished)
         {
-            SkeletonAttack();
+            TurnNumber++;
+            UpdateRespawns();
+            warriorHasFought = false;
+            foughtDuringWarriorTurn = null;
         }
-        else
+        runningEnemyTurn = false;
+    }
+
+    private void UpdateRespawns()
+    {
+        foreach (Enemy enemy in enemies)
         {
-            Debug.Log("Skeleton is still too far to attack.");
+            if (!enemy.Unit.IsDead)
+                continue;
+
+            if (TurnNumber + 1 == enemy.RespawnOnTurn && enemy.Renderer != null)
+                enemy.Renderer.color = new Color(0.6f, 0.1f, 1f);
+
+            if (TurnNumber < enemy.RespawnOnTurn || enemy.Tile == warriorTile || IsOccupiedByOpponent(enemy.Tile))
+                continue;
+
+            enemy.Unit.Respawn();
+            if (enemy.Renderer != null)
+                enemy.Renderer.color = enemy.OriginalColor;
         }
     }
 
-    // ==============================
-    // SKELETON MOVEMENT - BFS
-    // ==============================
-    private bool CanSkeletonSeeWarrior()
-{
-    if (skeletonTile == null || warriorTile == null)
-        return false;
-
-    int dx = Mathf.Abs(warriorTile.x - skeletonTile.x);
-    int dy = Mathf.Abs(warriorTile.y - skeletonTile.y);
-
-    if (dx != 0 && dy != 0 && dx != dy)
-        return false;
-
-    if (Mathf.Max(dx, dy) > skeletonDetectionRange)
-        return false;
-
-    return HasLineOfSight(skeletonTile, warriorTile);
-}
-
-private bool HasLineOfSight(Tile from, Tile to)
-{
-    Tile[] allTiles = FindObjectsByType<Tile>(
-        FindObjectsSortMode.None
-    );
-
-    Dictionary<Vector2Int, Tile> tileMap =
-        new Dictionary<Vector2Int, Tile>();
-
-    foreach (Tile tile in allTiles)
+    private bool CanSeeWarrior(Tile tile)
     {
-        if (tile.gameObject.scene != gameObject.scene)
-            continue;
-
-        Vector2Int position = new Vector2Int(tile.x, tile.y);
-
-        if (tileMap.ContainsKey(position))
+        Vector2Int start = Cell(tile);
+        Vector2Int delta = Cell(warriorTile) - start;
+        int dx = Mathf.Abs(delta.x);
+        int dy = Mathf.Abs(delta.y);
+        int distance = Mathf.Max(dx, dy);
+        if (distance > skeletonDetectionRange || (dx != 0 && dy != 0 && dx != dy))
             return false;
 
-        tileMap.Add(position, tile);
-    }
-
-    int x = from.x;
-    int y = from.y;
-
-    int dx = Mathf.Abs(to.x - from.x);
-    int dy = Mathf.Abs(to.y - from.y);
-
-    int stepX = to.x > from.x ? 1 : -1;
-    int stepY = to.y > from.y ? 1 : -1;
-
-    int ix = 0;
-    int iy = 0;
-
-    while (ix < dx || iy < dy)
-    {
-        int horizontal = (1 + 2 * ix) * dy;
-        int vertical = (1 + 2 * iy) * dx;
-
-        if (horizontal == vertical)
+        var step = new Vector2Int(delta.x.CompareTo(0), delta.y.CompareTo(0));
+        for (int i = 0; i < distance; i++)
         {
-            if (IsVisionBlocked(tileMap, x + stepX, y) ||
-                IsVisionBlocked(tileMap, x, y + stepY))
-            {
+            if (step.x != 0 && step.y != 0 &&
+                (BlocksVision(start + new Vector2Int(step.x, 0)) || BlocksVision(start + new Vector2Int(0, step.y))))
                 return false;
-            }
 
-            x += stepX;
-            y += stepY;
-            ix++;
-            iy++;
+            start += step;
+            if (BlocksVision(start))
+                return false;
         }
-        else if (horizontal < vertical)
-        {
-            x += stepX;
-            ix++;
-        }
-        else
-        {
-            y += stepY;
-            iy++;
-        }
-
-        if (IsVisionBlocked(tileMap, x, y))
-            return false;
-    }
-
-    return true;
-}
-
-private bool IsVisionBlocked(
-    Dictionary<Vector2Int, Tile> tileMap,
-    int x,
-    int y)
-{
-    if (!tileMap.TryGetValue(
-        new Vector2Int(x, y), out Tile tile))
-    {
         return true;
     }
 
-    return tile.isWall;
-}
+    private bool BlocksVision(Vector2Int cell) => !board.TryGetValue(cell, out Tile tile) || tile.isWall;
 
-    private Tile FindNextSkeletonTile()
+    private Tile FindNextTile(Tile start)
     {
-        Tile[] allTiles = FindObjectsByType<Tile>(
-            FindObjectsSortMode.None
-        );
-
-        Dictionary<Vector2Int, Tile> tileMap =
-            new Dictionary<Vector2Int, Tile>();
-
-        foreach (Tile tile in allTiles)
-        {
-            if (tile.gameObject.scene != gameObject.scene)
-                continue;
-
-            Vector2Int position =
-                new Vector2Int(tile.x, tile.y);
-
-            if (tileMap.ContainsKey(position))
-            {
-                Debug.LogWarning(
-                    $"Duplicate tile coordinates: {position}"
-                );
-
-                return null;
-            }
-
-            tileMap.Add(position, tile);
-        }
-
-        Queue<Tile> queue = new Queue<Tile>();
-
-        HashSet<Tile> visited = new HashSet<Tile>();
-
-        Dictionary<Tile, Tile> previous =
-            new Dictionary<Tile, Tile>();
-
-        queue.Enqueue(skeletonTile);
-        visited.Add(skeletonTile);
-
-        Vector2Int[] directions =
-        {
-            Vector2Int.up,
-            Vector2Int.down,
-            Vector2Int.left,
-            Vector2Int.right
-        };
+        var queue = new Queue<Tile>();
+        var firstStep = new Dictionary<Tile, Tile> { [start] = null };
+        queue.Enqueue(start);
 
         while (queue.Count > 0)
         {
-            Tile currentTile = queue.Dequeue();
+            Tile current = queue.Dequeue();
+            if (Distance(current, warriorTile) == 1)
+                return firstStep[current];
 
-            if (GetDistance(currentTile, warriorTile) == 1)
+            foreach (Vector2Int direction in Directions)
             {
-                Tile step = currentTile;
-
-                while (previous.ContainsKey(step) &&
-                       previous[step] != skeletonTile)
-                {
-                    step = previous[step];
-                }
-
-                return step;
-            }
-
-            foreach (Vector2Int direction in directions)
-            {
-                Vector2Int nextPosition = new Vector2Int(
-                    currentTile.x + direction.x,
-                    currentTile.y + direction.y
-                );
-
-                if (!tileMap.TryGetValue(
-                    nextPosition, out Tile neighbor))
-                {
-                    continue;
-                }
-
-                if (visited.Contains(neighbor))
+                if (!board.TryGetValue(Cell(current) + direction, out Tile next) ||
+                    next == warriorTile || next.isWall || firstStep.ContainsKey(next) || IsOccupiedByOpponent(next))
                     continue;
 
-                if (neighbor.isWall)
-                    continue;
-
-                if (neighbor == warriorTile)
-                    continue;
-
-                visited.Add(neighbor);
-                previous[neighbor] = currentTile;
-
-                queue.Enqueue(neighbor);
+                firstStep[next] = current == start ? next : firstStep[current];
+                queue.Enqueue(next);
             }
         }
-
         return null;
     }
 
-    private void MoveSkeleton(Tile targetTile)
-    {
-        if (targetTile == null ||
-            targetTile.isWall ||
-            targetTile == warriorTile)
-        {
-            return;
-        }
+    private static Vector2Int Cell(Tile tile) => new(tile.x, tile.y);
 
-        skeletonTile = targetTile;
-
-        MoveUnitToTile(skeleton, skeletonTile);
-
-        Debug.Log(
-            $"Skeleton moved to tile ({targetTile.x}, {targetTile.y})"
-        );
-    }
-
-    private void MoveUnitToTile(CombatUnit unit, Tile tile)
-    {
-        if (unit == null || tile == null)
-            return;
-
-        Vector3 position = tile.transform.position;
-
-        position.z = unit.transform.position.z;
-
-        unit.transform.position = position;
-    }
-
-    private int GetDistance(Tile first, Tile second)
-    {
-        return Mathf.Abs(first.x - second.x) +
-               Mathf.Abs(first.y - second.y);
-    }
-
-    // ==============================
-    // SKELETON ATTACK
-    // ==============================
-
-    public void SkeletonAttack()
-{
-    if (!Application.isPlaying ||
-        currentTurn != CombatTurn.Skeleton)
-        return;
-
-    ResolveCombatRound();
-}
-    private void TryStartCombatAutomatically()
-    {
-        if (currentTurn == CombatTurn.Finished)
-            return;
-
-        if (warrior == null || skeleton == null)
-            return;
-
-        if (warrior.IsDead || skeleton.IsDead)
-            return;
-
-        if (warriorTile == null || skeletonTile == null)
-            return;
-
-        if (warriorHasAttacked)
-            return;
-
-        if (GetDistance(warriorTile, skeletonTile) == 1)
-        {
-            Debug.Log("COMBAT STARTED AUTOMATICALLY!");
-
-            ResolveCombatRound();
-        }
-    }
-    private void CheckLevelVictory()
-    {
-        if (currentTurn == CombatTurn.Finished)
-            return;
-
-        if (warrior == null || warrior.IsDead)
-            return;
-
-        if (warriorTile == null || exitTile == null)
-            return;
-
-        if (warriorTile != exitTile)
-            return;
-
-        if (!hasArtifact)
-        {
-            Debug.Log("EXIT LOCKED! Find the artifact first.");
-            return;
-        }
-
-        hasWon = true;
-        currentTurn = CombatTurn.Finished;
-
-        Debug.Log("ARTIFACT DELIVERED!");
-        Debug.Log("VICTORY! LEVEL COMPLETED!");
-    }
-    private void CheckArtifactPickup()
-    {
-        if (hasArtifact)
-            return;
-
-        if (warrior == null || warrior.IsDead)
-            return;
-
-        if (warriorTile == null || artifactTile == null)
-            return;
-
-        if (warriorTile == artifactTile)
-        {
-            hasArtifact = true;
-
-            if (artifact != null)
-            {
-                artifact.SetActive(false);
-            }
-
-            Debug.Log("ARTIFACT COLLECTED!");
-            Debug.Log("Find the exit!");
-        }
-    }
-    public void NotifyWarriorMoved(Tile newTile)
-    {
-        if (!CanWarriorMove)
-        {
-            Debug.Log("Warrior movement is blocked!");
-            return;
-        }
-
-        if (newTile == null || newTile.isWall)
-            return;
-
-        if (newTile == skeletonTile &&
-            skeleton != null &&
-            !skeleton.IsDead)
-        {
-            return;
-        }
-
-        warriorTile = newTile;
-
-        CheckArtifactPickup();
-
-        TryStartCombatAutomatically();
-
-        CheckLevelVictory();
-    }
-    private void HandleSkeletonDeath()
-    {
-        skeletonDeadTurns = 0;
-
-        if (skeletonRenderer != null)
-        {
-            skeletonRenderer.color = Color.gray;
-        }
-
-        Debug.Log("Skeleton defeated!");
-        Debug.Log("Skeleton will respawn in 4 turns.");
-    }
-
-    private void UpdateSkeletonRespawn()
-    {
-        if (skeleton == null || !skeleton.IsDead)
-            return;
-
-        skeletonDeadTurns++;
-
-        Debug.Log(
-            $"Skeleton respawn: {skeletonDeadTurns}/{skeletonRespawnDelay}"
-        );
-
-        if (skeletonDeadTurns == skeletonRespawnDelay - 1)
-        {
-            if (skeletonRenderer != null)
-            {
-                skeletonRenderer.color =
-                    new Color(0.6f, 0.1f, 1f);
-            }
-
-            Debug.Log("Skeleton eyes are glowing purple!");
-        }
-
-        if (skeletonDeadTurns >= skeletonRespawnDelay)
-        {
-            if (warriorTile == skeletonTile)
-            {
-                Debug.Log("Respawn delayed: tile is occupied.");
-                return;
-            }
-
-            skeleton.Respawn();
-
-            skeletonDeadTurns = 0;
-
-            if (skeletonRenderer != null)
-            {
-                skeletonRenderer.color = skeletonOriginalColor;
-            }
-
-            TryStartCombatAutomatically();
-        }
-    }
-
-private void ResolveCombatRound()
-{
-    if (warrior == null || skeleton == null)
-        return;
-
-    if (warriorTile == null || skeletonTile == null)
-        return;
-
-    if (warrior.IsDead || skeleton.IsDead)
-        return;
-
-    if (warriorHasAttacked)
-        return;
-
-    if (GetDistance(warriorTile, skeletonTile) != 1)
-    {
-        Debug.Log("Characters are not adjacent!");
-        return;
-    }
-
-    warriorHasAttacked = true;
-    dungeonHud?.BeginCombatRound();
-
-    Debug.Log("COMBAT ROUND STARTED!");
-
-    // Equal initiative
-    if (warrior.Agility == skeleton.Agility)
-    {
-        Debug.Log("SIMULTANEOUS ATTACK!");
-
-        int warriorDamage = CalculateDamage(
-            warrior, skeleton
-        );
-
-        int skeletonDamage = CalculateDamage(
-            skeleton, warrior
-        );
-
-        skeleton.TakeDamage(warriorDamage);
-        warrior.TakeDamage(skeletonDamage);
-    }
-
-    // Warrior attacks first
-    else if (warrior.Agility > skeleton.Agility)
-    {
-        Debug.Log("Warrior has initiative!");
-
-        skeleton.TakeDamage(
-            CalculateDamage(warrior, skeleton)
-        );
-
-        if (!skeleton.IsDead)
-        {
-            warrior.TakeDamage(
-                CalculateDamage(skeleton, warrior)
-            );
-        }
-    }
-
-    // Skeleton attacks first
-    else
-    {
-        Debug.Log("Skeleton has initiative!");
-
-        warrior.TakeDamage(
-            CalculateDamage(skeleton, warrior)
-        );
-
-        if (!warrior.IsDead)
-        {
-            skeleton.TakeDamage(
-                CalculateDamage(warrior, skeleton)
-            );
-        }
-    }
-
-    // Combat result
-    if (warrior.IsDead && skeleton.IsDead)
-    {
-        currentTurn = CombatTurn.Finished;
-        Debug.Log("DRAW! Both characters defeated!");
-    }
-    else if (skeleton.IsDead)
-    {
-        HandleSkeletonDeath();
-    }
-    else if (warrior.IsDead)
-    {
-        currentTurn = CombatTurn.Finished;
-        Debug.Log("SKELETON WINS!");
-    }
-    else
-    {
-        Debug.Log("Combat round finished!");
-    }
-}
-
-private int CalculateDamage(
-    CombatUnit attacker,
-    CombatUnit defender)
-{
-    int totalRoll = 0;
-    int[] results = dungeonHud != null ? new int[attacker.Strength] : null;
-
-    for (int i = 0; i < attacker.Strength; i++)
-    {
-        int diceRoll = Random.Range(1, 7);
-        if (results != null)
-            results[i] = diceRoll;
-
-        totalRoll += diceRoll;
-
-        Debug.Log(
-            $"{attacker.unitName} rolled D6: {diceRoll}"
-        );
-    }
-
-    if (results != null)
-        dungeonHud.RecordCombatRoll(attacker == warrior, results);
-
-    int damage = Mathf.Max(0, totalRoll - defender.Armor);
-
-    Debug.Log(
-        $"{attacker.unitName} deals {damage} damage!"
-    );
-
-    return damage;
-}
-
-    // ==============================
-    // ATTACK CALCULATION
-    // ==============================
-
-    private bool TryAttack(
-        CombatUnit attacker,
-        CombatUnit defender)
-    {
-        if (attacker == null || defender == null)
-        {
-            Debug.LogError("Combat participants are missing!");
-            return false;
-        }
-
-        if (attacker.IsDead || defender.IsDead)
-        {
-            Debug.LogWarning(
-                "A defeated character cannot fight!"
-            );
-
-            return false;
-        }
-
-        Tile attackerTile;
-        Tile defenderTile;
-
-        if (attacker == warrior && defender == skeleton)
-        {
-            attackerTile = warriorTile;
-            defenderTile = skeletonTile;
-        }
-        else if (attacker == skeleton && defender == warrior)
-        {
-            attackerTile = skeletonTile;
-            defenderTile = warriorTile;
-        }
-        else
-        {
-            Debug.LogError("Unknown combat participants!");
-            return false;
-        }
-
-        if (attackerTile == null || defenderTile == null)
-        {
-            Debug.LogWarning("Combat tiles are not assigned!");
-            return false;
-        }
-
-        if (GetDistance(attackerTile, defenderTile) != 1)
-        {
-            Debug.LogWarning(
-                $"{attacker.unitName} cannot attack! Target is not adjacent."
-            );
-
-            return false;
-        }
-
-        int totalRoll = 0;
-
-        for (int i = 0; i < attacker.Strength; i++)
-        {
-            int diceRoll = Random.Range(1, 7);
-
-            totalRoll += diceRoll;
-
-            Debug.Log(
-                $"{attacker.unitName} rolled D6: {diceRoll}"
-            );
-        }
-
-        int damage = Mathf.Max(
-            0,
-            totalRoll - defender.Armor
-        );
-
-        Debug.Log(
-            $"{attacker.unitName} attacks {defender.unitName}!"
-        );
-
-        Debug.Log($"Total roll: {totalRoll}");
-        Debug.Log($"Damage after shield: {damage}");
-
-        defender.TakeDamage(damage);
-
-        return true;
-    }
-
-    // ==============================
-    // TEST COMMANDS
-    // ==============================
-
-    [ContextMenu("Test Warrior Attack")]
-    private void TestWarriorAttack()
-    {
-        WarriorAttack();
-    }
-
-    [ContextMenu("Test End Warrior Turn")]
-    private void TestEndWarriorTurn()
-    {
-        EndWarriorTurn();
-    }
+    private static int Distance(Tile a, Tile b) => Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
 }

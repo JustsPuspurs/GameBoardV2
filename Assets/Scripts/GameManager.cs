@@ -164,16 +164,28 @@ public class GameManager : MonoBehaviour
             return;
 
         CombatUnit warrior = dungeonCombat.Warrior;
-        CombatUnit opponent = dungeonCombat.Opponent;
         dungeonCombat.AttachHud(dungeonHud);
         dungeonHud.Configure(rollButton, diceText, diceFaces,
-            warrior.GetComponent<SpriteRenderer>().sprite, warrior.unitName,
-            opponent.GetComponent<SpriteRenderer>().sprite, opponent.unitName, EndTurn);
+            warrior.GetComponent<SpriteRenderer>().sprite, warrior.unitName, EndTurn, dungeonCombat.WarriorAttack);
         UpdateDungeonHud();
     }
 
     private void Update()
     {
+        if (dungeonCombat == null)
+            return;
+
+        if (dungeonCombat.IsCombatFinished && currentPhase != TurnPhase.GameOver)
+        {
+            currentPhase = TurnPhase.GameOver;
+            UpdateUI();
+        }
+        else if (currentPhase == TurnPhase.MonsterTurn && !dungeonCombat.IsMonsterTurn)
+        {
+            CompleteMonsterTurn();
+        }
+
+        UpdateButtons();
         if (dungeonHud != null)
             UpdateDungeonHud();
     }
@@ -181,10 +193,12 @@ public class GameManager : MonoBehaviour
     private void UpdateDungeonHud()
     {
         CombatUnit warrior = dungeonCombat.Warrior;
-        CombatUnit opponent = dungeonCombat.Opponent;
         dungeonHud.SetHero(warrior.CurrentHealth, warrior.maxHealth, warrior.Agility, warrior.Armor, warrior.Strength);
-        dungeonHud.SetEnemy(dungeonCombat.IsInMelee || dungeonHud.HasCombatRolls,
-            opponent.CurrentHealth, opponent.maxHealth, opponent.Agility, opponent.Armor, opponent.Strength);
+        dungeonHud.SetEnemy(dungeonCombat.Opponent, dungeonCombat.HasPendingFight,
+            dungeonCombat.IsRollingFight);
+        dungeonHud.SetTurn(dungeonCombat.TurnNumber,
+            endTurnButton != null && endTurnButton.interactable && hasRolled && !HasAvailableMove(),
+            warrior.IsDead);
     }
 
     private void FindFinishTile()
@@ -272,6 +286,19 @@ public class GameManager : MonoBehaviour
     }
 
     // This is the single source of truth used by both click validation and highlights.
+    private bool HasAvailableMove()
+    {
+        if (!CanAttemptMovement())
+            return false;
+
+        foreach (Tile tile in allTiles)
+        {
+            if (IsValidMove(player1Tile, tile, out _))
+                return true;
+        }
+        return false;
+    }
+
     private bool IsValidMove(Tile fromTile, Tile targetTile, out string reason)
     {
         reason = string.Empty;
@@ -403,6 +430,8 @@ public class GameManager : MonoBehaviour
             diceText.text = "Exit locked. Find the artifact.";
         else if (!hadArtifact && dungeonCombat.HasArtifact)
             diceText.text = "Artifact collected. Find the exit.";
+        else if (dungeonCombat.HasPendingFight)
+            diceText.text = "Enemy nearby. Choose Fight.";
         else if (!dungeonCombat.CanWarriorMove)
             diceText.text = "Combat ended movement for this turn.";
         else
@@ -525,7 +554,7 @@ public class GameManager : MonoBehaviour
     public void EndTurn()
     {
         if (gameOver || currentPhase != TurnPhase.HeroTurn || isRolling || isAnimatingMove ||
-            (dungeonCombat != null && dungeonCombat.IsCombatFinished))
+            (dungeonCombat != null && !dungeonCombat.CanEndWarriorTurn))
             return;
 
         // End Turn is allowed even if the Warrior has no legal move or unused points remain.
@@ -544,15 +573,6 @@ public class GameManager : MonoBehaviour
         if (dungeonCombat != null)
         {
             dungeonCombat.EndWarriorTurn();
-            if (dungeonCombat.IsCombatFinished)
-            {
-                currentPhase = TurnPhase.GameOver;
-                UpdateUI();
-            }
-            else
-            {
-                CompleteMonsterTurn();
-            }
         }
         else if (onMonsterTurnStarted != null && onMonsterTurnStarted.GetPersistentEventCount() > 0)
         {
@@ -824,7 +844,7 @@ public class GameManager : MonoBehaviour
         if (dungeonCombat != null)
         {
             heroCanRoll &= dungeonCombat.CanWarriorMove;
-            heroCanEndTurn &= !dungeonCombat.IsCombatFinished;
+            heroCanEndTurn &= dungeonCombat.CanEndWarriorTurn;
         }
 
         if (rollButton != null) rollButton.interactable = heroCanRoll;

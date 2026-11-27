@@ -33,6 +33,20 @@ public sealed class DungeonHud : MonoBehaviour
     private TMP_Text legacyResult;
     private Button originalRoll;
     private Button roll;
+    private Button fight;
+    private Button escape;
+    private Button endTurnButton;
+    private Button restartButton;
+    private RectTransform fightDicePanel;
+    private Text turnNumber;
+    private Text enemyName;
+    private Image enemyPortrait;
+    private CombatUnit shownEnemy;
+    private bool endTurnSuggested;
+    private bool lost;
+    private bool fightPending;
+    private bool fightAnimating;
+    private int shownTurn;
     private Text movementStatus;
     private Text diceCount;
     private Text encounterResult;
@@ -49,15 +63,14 @@ public sealed class DungeonHud : MonoBehaviour
     private RectTransform enemyTray;
     private RectTransform encounter;
     private AudioSource audioSource;
+    private bool movementUsesExistingAudio;
     private int movementCount;
     private int[] movementResults;
-    private int[] heroResults;
-    private int[] enemyResults;
     private bool rolling;
     private bool rollWasReady;
 
     public void Configure(Button legacyRoll, TMP_Text status, Sprite[] diceFaces, Sprite heroPortrait,
-        string heroClass, Sprite enemyPortrait = null, string enemyName = null, Action endTurn = null)
+        string heroClass, Action endTurn, Action beginFight)
     {
         if (legacyRoll == null || status == null)
             return;
@@ -89,15 +102,20 @@ public sealed class DungeonHud : MonoBehaviour
         CharacterCard(heroCard, playerName, heroClass, heroPortrait, Health,
             out heroHealth, out heroHealthFill, out heroStats);
 
-        if (!string.IsNullOrEmpty(enemyName))
-        {
-            encounter = Frame(root, "Encounter card", TopLeft, 26, -249, 300, 350);
-            CharacterCard(encounter, enemyName, "Opponent", enemyPortrait, Enemy,
-                out enemyHealth, out enemyHealthFill, out enemyStats);
-            (heroTray, heroDice, heroRollText) = CombatDice(encounter, "Your attack", 212);
-            (enemyTray, enemyDice, enemyRollText) = CombatDice(encounter, "Enemy attack", 280);
-            encounter.gameObject.SetActive(false);
-        }
+        RectTransform turnCard = Frame(root, "Current turn", new Vector2(0.5f, 1), -86, -18, 172, 78);
+        Label(turnCard, "CURRENT TURN", 8, 7, 15, 156, 23, Gold, FontStyle.Bold, TextAnchor.MiddleCenter);
+        turnNumber = Label(turnCard, "01", 8, 31, 30, 156, 36, Ink, FontStyle.Bold, TextAnchor.MiddleCenter);
+
+        encounter = Frame(root, "Encounter card", TopLeft, 26, -249, 300, 350);
+        CharacterCard(encounter, "", "Opponent", null, Enemy,
+            out enemyHealth, out enemyHealthFill, out enemyStats, isOpponent: true);
+        fight = ActionButton(encounter, "Fight", 16, 221, 128, 48, Gold, () => beginFight());
+        escape = ActionButton(encounter, "Escape", 156, 221, 128, 48, Muted, null);
+        escape.interactable = false;
+        fightDicePanel = Place(encounter, "Fight dice", TopLeft, TopLeft, 0, 0, 300, 350);
+        (heroTray, heroDice, heroRollText) = CombatDice(fightDicePanel, "Your attack", 212);
+        (enemyTray, enemyDice, enemyRollText) = CombatDice(fightDicePanel, "Enemy attack", 280);
+        encounter.gameObject.SetActive(false);
 
         RectTransform move = Frame(root, "Movement dice", Vector2.zero, 26, 12, 500, 96);
         Label(move, "MOVEMENT", 17, 5, 16, 170, 22, Gold, FontStyle.Bold);
@@ -108,16 +126,16 @@ public sealed class DungeonHud : MonoBehaviour
             () => originalRoll.onClick.Invoke());
         movementStatus = Label(move, "", 17, 74, 14, 466, 21, Muted);
 
-        RectTransform controls = Frame(root, "Controls", BottomRight, -403, 24, 377, 76);
+        RectTransform controls = Frame(root, "Controls", BottomRight, -313, 24, 287, 76);
         int controlIndex = 0;
-        foreach (string label in new[] { "Attack", "End turn", "Restart", "Menu" })
+        foreach (string label in new[] { "End turn", "Restart", "Menu" })
         {
             Button source = Array.Find(originalButtons, button => MatchesAction(button.name, label));
             if (source == null)
                 continue;
 
             Button proxy = ActionButton(controls, label, 10 + controlIndex * 90, 16, 86, 44,
-                label == "Attack" ? Enemy : Ink, () =>
+                Ink, () =>
                 {
                     if (label == "End turn" && endTurn != null)
                         endTurn();
@@ -125,17 +143,22 @@ public sealed class DungeonHud : MonoBehaviour
                         source.onClick.Invoke();
                 });
             actions[controlIndex++] = (source, proxy);
+            if (label == "End turn")
+                endTurnButton = proxy;
+            else if (label == "Restart")
+                restartButton = proxy;
         }
 
         encounterResult = Label(root, "", -250, 0, 21, 500, 40, Gold,
             FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.25f));
-        AudioSource existingSound = originalRoll.GetComponent<AudioSource>();
-        if (existingSound == null && diceSound != null)
+        bool originalHasAudio = originalRoll.GetComponent<AudioSource>() != null;
+        if (diceSound != null)
         {
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
             audioSource.volume = 0.65f;
         }
+        movementUsesExistingAudio = originalHasAudio;
 
         oldCanvas.enabled = false;
         if (oldCanvas.TryGetComponent(out GraphicRaycaster oldRaycaster))
@@ -158,32 +181,69 @@ public sealed class DungeonHud : MonoBehaviour
         DisplayDice(movementTray, movementDice, movementCount, null);
     }
 
-    public void SetEnemy(bool visible, int health, int maxHealth, int agility, int armor, int strength)
+    public void SetTurn(int number, bool suggestEndTurn, bool playerLost)
     {
-        if (encounter == null)
-            return;
-
-        encounter.gameObject.SetActive(visible);
-        if (visible)
-            SetCharacter(enemyHealth, enemyHealthFill, enemyStats, health, maxHealth, agility, armor, strength);
+        if (shownTurn != number)
+        {
+            shownTurn = number;
+            turnNumber.text = number.ToString("D2");
+        }
+        endTurnSuggested = suggestEndTurn;
+        lost = playerLost;
     }
 
-    public bool HasCombatRolls => heroResults != null || enemyResults != null;
+    public void SetEnemy(CombatUnit unit, bool pending, bool animating)
+    {
+        fightPending = pending;
+        fightAnimating = animating;
+        encounter.gameObject.SetActive(unit != null && (pending || fightDicePanel.gameObject.activeSelf));
+        if (unit == null || !encounter.gameObject.activeSelf)
+            return;
+
+        if (shownEnemy != unit)
+        {
+            shownEnemy = unit;
+            enemyName.text = unit.unitName;
+            enemyPortrait.sprite = unit.GetComponent<SpriteRenderer>().sprite;
+        }
+
+        escape.gameObject.SetActive(pending && !animating);
+        fight.gameObject.SetActive(pending && !animating);
+        fight.interactable = pending && !animating;
+        SetCharacter(enemyHealth, enemyHealthFill, enemyStats,
+            unit.CurrentHealth, unit.maxHealth, unit.Agility, unit.Armor, unit.Strength);
+    }
 
     public void BeginCombatRound()
     {
-        heroResults = null;
-        enemyResults = null;
-        DisplayCombatRolls();
+        if (fightDicePanel != null)
+            fightDicePanel.gameObject.SetActive(false);
     }
 
-    public void RecordCombatRoll(bool hero, int[] results)
+    public IEnumerator AnimateFight(int[] heroResults, int[] enemyResults, float duration)
     {
-        if (hero)
-            heroResults = results;
-        else
-            enemyResults = results;
-        DisplayCombatRolls();
+        if (fightDicePanel == null)
+        {
+            yield return new WaitForSeconds(duration);
+            yield break;
+        }
+
+        fightDicePanel.gameObject.SetActive(true);
+        heroRollText.text = "";
+        enemyRollText.text = "";
+        DisplayDice(heroTray, heroDice, heroResults.Length, null);
+        DisplayDice(enemyTray, enemyDice, enemyResults.Length, null);
+        if (audioSource != null)
+            audioSource.PlayOneShot(diceSound);
+
+        yield return AnimateDice(duration, (progress, refresh) =>
+        {
+            AnimateRow(heroDice, heroResults.Length, progress, refresh);
+            AnimateRow(enemyDice, enemyResults.Length, progress, refresh);
+        });
+
+        ShowCombatDice(heroTray, heroDice, heroRollText, heroResults);
+        ShowCombatDice(enemyTray, enemyDice, enemyRollText, enemyResults);
     }
 
     public IEnumerator AnimateMovement(int[] results, float duration)
@@ -196,33 +256,44 @@ public sealed class DungeonHud : MonoBehaviour
         movementResults = null;
         diceCount.text = results.Length + "D6";
         DisplayDice(movementTray, movementDice, movementCount, null);
-        if (audioSource != null)
+        if (audioSource != null && !movementUsesExistingAudio)
             audioSource.PlayOneShot(diceSound);
 
+        yield return AnimateDice(duration, (progress, refresh) =>
+            AnimateRow(movementDice, results.Length, progress, refresh));
+        movementResults = results;
+        DisplayDice(movementTray, movementDice, movementCount, movementResults);
+        rolling = false;
+    }
+
+    private static IEnumerator AnimateDice(float duration, Action<float, bool> animateFrame)
+    {
         duration = Mathf.Max(0.1f, duration);
         float nextFaceTime = 0f;
         for (float elapsed = 0f; elapsed < duration; elapsed += Time.deltaTime)
         {
             float progress = elapsed / duration;
             bool refreshFaces = elapsed >= nextFaceTime;
-            for (int i = 0; i < results.Length; i++)
-            {
-                Image die = movementDice[i];
-                float angle = Mathf.Lerp(720f + i * 60f, 0f, progress * progress);
-                die.rectTransform.localRotation = Quaternion.Euler(0, 0, angle);
-                die.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.78f, 1f, progress * progress);
-                if (refreshFaces)
-                    die.sprite = Face(UnityEngine.Random.Range(1, 7));
-            }
+            animateFrame(progress, refreshFaces);
             if (refreshFaces)
                 nextFaceTime = elapsed + Mathf.Lerp(0.06f, 0.24f, progress * progress);
 
             yield return null;
         }
+    }
 
-        movementResults = results;
-        DisplayDice(movementTray, movementDice, movementCount, movementResults);
-        rolling = false;
+    private void AnimateRow(Image[] dice, int count, float progress, bool refreshFaces)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Image die = dice[i];
+            float ease = progress * progress;
+            float angle = Mathf.Lerp(720f + i * 60f, 0f, ease);
+            die.rectTransform.localRotation = Quaternion.Euler(0, 0, angle);
+            die.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.78f, 1f, ease);
+            if (refreshFaces)
+                die.sprite = Face(UnityEngine.Random.Range(1, 7));
+        }
     }
 
     private void LateUpdate()
@@ -245,18 +316,34 @@ public sealed class DungeonHud : MonoBehaviour
                 action.proxy.interactable = action.source.interactable;
         }
 
-        movementStatus.text = legacyStatus.text;
+        Pulse(roll, rollReady);
+        Pulse(fight, fight.isActiveAndEnabled && fight.interactable);
+        Pulse(endTurnButton, endTurnSuggested);
+        Pulse(restartButton, lost);
+        if (lost)
+            movementStatus.text = "Restart to try again.";
+        else if (fightAnimating)
+            movementStatus.text = "Rolling combat dice...";
+        else if (fightPending)
+            movementStatus.text = "Enemy nearby. Choose Fight.";
+        else if (endTurnSuggested)
+            movementStatus.text = "End the turn.";
+        else
+            movementStatus.text = legacyStatus.text;
         encounterResult.text = legacyResult != null && legacyResult.gameObject.activeSelf
             ? legacyResult.text : "";
     }
 
-    private void DisplayCombatRolls()
+    private static void Pulse(Button button, bool active)
     {
-        if (encounter == null)
+        if (button == null)
             return;
 
-        ShowCombatDice(heroTray, heroDice, heroRollText, heroResults);
-        ShowCombatDice(enemyTray, enemyDice, enemyRollText, enemyResults);
+        float intensity = active ? 0.58f + 0.42f * Mathf.Sin(Time.unscaledTime * 6f) : 0f;
+        Image border = button.GetComponent<Image>();
+        border.color = Color.Lerp(Edge, Gold, intensity);
+        Outline glow = button.GetComponent<Outline>();
+        glow.effectColor = new Color(1f, 0.69f, 0.28f, intensity * 0.65f);
     }
 
     private void ShowCombatDice(RectTransform tray, Image[] dice, Text label, int[] results)
@@ -328,14 +415,19 @@ public sealed class DungeonHud : MonoBehaviour
     }
 
     private void CharacterCard(RectTransform card, string name, string role, Sprite portrait, Color tint,
-        out Text healthLabel, out Image fill, out Text stats)
+        out Text healthLabel, out Image fill, out Text stats, bool isOpponent = false)
     {
         RectTransform portraitWell = Frame(card, "Portrait frame", TopLeft, 16, -16, 64, 64, true);
         Image icon = AddImage(Place(portraitWell, "Portrait", TopLeft, TopLeft, 8, -8, 48, 48), Ink);
         icon.sprite = portrait;
         icon.color = tint;
         icon.preserveAspect = true;
-        Label(card, name, 94, 20, 23, 190, 30, Ink, FontStyle.Bold);
+        Text nameLabel = Label(card, name, 94, 20, 23, 190, 30, Ink, FontStyle.Bold);
+        if (isOpponent)
+        {
+            enemyName = nameLabel;
+            enemyPortrait = icon;
+        }
         Label(card, role, 94, 51, 16, 190, 22, tint);
         healthLabel = Label(card, "", 16, 91, 16, 268, 24, Ink, FontStyle.Bold);
         RectTransform bar = Frame(card, "Health track", TopLeft, 16, -122, 268, 15, true);
@@ -357,7 +449,6 @@ public sealed class DungeonHud : MonoBehaviour
 
     private static bool MatchesAction(string name, string label) => label switch
     {
-        "Attack" => name == "AttackButton",
         "End turn" => name == "EndTurnButton" || name == "EndTurn",
         "Restart" => name == "RestartButton",
         "Menu" => name == "MainMenuButton",
@@ -370,6 +461,9 @@ public sealed class DungeonHud : MonoBehaviour
         RectTransform frame = Frame(parent, label + " button", TopLeft, x, -y, w, h, true);
         Image target = frame.GetChild(0).GetComponent<Image>();
         target.raycastTarget = true;
+        Outline glow = frame.gameObject.AddComponent<Outline>();
+        glow.effectColor = Color.clear;
+        glow.effectDistance = new Vector2(2, 2);
         Button button = frame.gameObject.AddComponent<Button>();
         button.targetGraphic = target;
         ColorBlock colors = button.colors;
@@ -377,7 +471,8 @@ public sealed class DungeonHud : MonoBehaviour
         colors.pressedColor = new Color(0.78f, 0.75f, 0.72f);
         colors.disabledColor = new Color(0.65f, 0.65f, 0.65f);
         button.colors = colors;
-        button.onClick.AddListener(onClick);
+        if (onClick != null)
+            button.onClick.AddListener(onClick);
         Label(frame, label, 1, 0, 16, w - 2, h, color, FontStyle.Bold, TextAnchor.MiddleCenter);
         return button;
     }
