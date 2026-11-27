@@ -20,7 +20,7 @@ public class MainMenuManager : MonoBehaviour
     // Sāk spēli
     public void PlayGame()
     {
-        SceneManager.LoadScene(1);
+        SceneManager.LoadScene("DR04_Dungeon5x5");
     }
 
     // Atvērt spēles noteikumus

@@ -776,23 +776,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7935568346533511101, guid: 589e6d3ff2d7d304aa0c727d69e355a9, type: 3}
       propertyPath: m_text
-      value: '1. Players take turns rolling the dice.
-
-        2. Move your piece
-        according to the number rolled.
-
-        3. Collect yellow items to earn
-        points.
-
-        4. Watch out for hidden traps! Red tiles remove 2 points.
-
-        5.
-        Collect 10 items and reach the finish tile to win.
-
-        Be the first
-        player to reach the finish with 10 items!
-
-'
+      value: "1. Roll one D6 per Agility to gain movement points. Move between cells that share an edge. Most cells cost 1 point, rough ground costs 2.\n\n2. Stop next to the Skeleton to fight. End Turn lets the Skeleton act.\n\n3. Collect the artefact and reach the exit to win. At 0 HP, restart to try again."
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -71,6 +71,11 @@ public class GameManager : MonoBehaviour
     [Header("Main Menu")]
     public string mainMenuSceneName = "MainMenu";
 
+    [SerializeField] private CombatSystem dungeonCombat;
+
+    private DungeonHud dungeonHud;
+    private int MovementAgility => dungeonCombat != null ? dungeonCombat.Warrior.Agility : Mathf.Max(1, agility);
+
     private TurnPhase currentPhase = TurnPhase.HeroTurn;
     private int remainingMoves;
     private int collectedPoints;
@@ -105,7 +110,7 @@ public class GameManager : MonoBehaviour
     {
         if (winText != null) winText.text = string.Empty;
 
-        allTiles = FindObjectsOfType<Tile>();
+        allTiles = FindObjectsByType<Tile>(FindObjectsSortMode.InstanceID);
         if (allTiles == null || allTiles.Length == 0)
         {
             Debug.LogError("GameManager: No Tile objects found in the scene.");
@@ -121,15 +126,25 @@ public class GameManager : MonoBehaviour
 
         warriorStartTile = player1Tile;
 
-        FindFinishTile();
-        CalculateGridCoordinates();
+        if (dungeonCombat == null)
+        {
+            FindFinishTile();
+            CalculateGridCoordinates();
+        }
 
         if (player1 != null && player1Tile != null)
             player1.position = player1Tile.transform.position;
 
         // Player 2 is deliberately not positioned or used. It is a legacy PvP reference.
-        GenerateRandomBadTiles();
-        GenerateRandomItems();
+        if (dungeonCombat == null)
+        {
+            GenerateRandomBadTiles();
+            GenerateRandomItems();
+        }
+        else
+        {
+            ConfigureDungeonHud();
+        }
 
         currentPhase = TurnPhase.HeroTurn;
         hasRolled = false;
@@ -140,6 +155,36 @@ public class GameManager : MonoBehaviour
 
         if (diceText != null)
             diceText.text = "Warrior turn - roll the dice.";
+    }
+
+    private void ConfigureDungeonHud()
+    {
+        dungeonHud = GetComponent<DungeonHud>();
+        if (dungeonHud == null)
+            return;
+
+        CombatUnit warrior = dungeonCombat.Warrior;
+        CombatUnit opponent = dungeonCombat.Opponent;
+        dungeonCombat.AttachHud(dungeonHud);
+        dungeonHud.Configure(rollButton, diceText, diceFaces,
+            warrior.GetComponent<SpriteRenderer>().sprite, warrior.unitName,
+            opponent.GetComponent<SpriteRenderer>().sprite, opponent.unitName, EndTurn);
+        UpdateDungeonHud();
+    }
+
+    private void Update()
+    {
+        if (dungeonHud != null)
+            UpdateDungeonHud();
+    }
+
+    private void UpdateDungeonHud()
+    {
+        CombatUnit warrior = dungeonCombat.Warrior;
+        CombatUnit opponent = dungeonCombat.Opponent;
+        dungeonHud.SetHero(warrior.CurrentHealth, warrior.maxHealth, warrior.Agility, warrior.Armor, warrior.Strength);
+        dungeonHud.SetEnemy(dungeonCombat.IsInMelee || dungeonHud.HasCombatRolls,
+            opponent.CurrentHealth, opponent.maxHealth, opponent.Agility, opponent.Armor, opponent.Strength);
     }
 
     private void FindFinishTile()
@@ -221,6 +266,7 @@ public class GameManager : MonoBehaviour
                !isRolling &&
                !isAnimatingMove &&
                remainingMoves > 0 &&
+               (dungeonCombat == null || dungeonCombat.CanWarriorMove) &&
                player1 != null &&
                player1Tile != null;
     }
@@ -272,6 +318,8 @@ public class GameManager : MonoBehaviour
 
     private bool IsOccupiedByOtherCharacter(Tile tile)
     {
+        if (dungeonCombat != null)
+            return dungeonCombat.IsOccupiedByOpponent(tile);
         if (tile == null || otherCharacters == null) return false;
 
         foreach (Transform character in otherCharacters)
@@ -321,24 +369,55 @@ public class GameManager : MonoBehaviour
 
         // Spend points only after the move has completed successfully.
         remainingMoves = Mathf.Max(0, remainingMoves - movementCost);
-        EvaluateTileEffect(targetTile);
+        if (dungeonCombat == null)
+        {
+            EvaluateTileEffect(targetTile);
+            if (diceText != null && !gameOver)
+                diceText.text = "Movement points left: " + remainingMoves;
+        }
+        else
+        {
+            ApplyDungeonMove(targetTile);
+        }
 
         isAnimatingMove = false;
-        if (diceText != null && !gameOver)
-            diceText.text = "Movement points left: " + remainingMoves;
 
         UpdateUI();
         UpdateButtons();
         RefreshMoveHighlights();
     }
 
+    private void ApplyDungeonMove(Tile targetTile)
+    {
+        bool hadArtifact = dungeonCombat.HasArtifact;
+        dungeonCombat.NotifyWarriorMoved(targetTile);
+        if (!dungeonCombat.CanWarriorMove)
+            remainingMoves = 0;
+
+        if (diceText == null)
+            return;
+
+        if (dungeonCombat.IsCombatFinished)
+            diceText.text = dungeonCombat.HasWon ? "Artifact delivered." : "Restart to try again.";
+        else if (dungeonCombat.IsAtLockedExit)
+            diceText.text = "Exit locked. Find the artifact.";
+        else if (!hadArtifact && dungeonCombat.HasArtifact)
+            diceText.text = "Artifact collected. Find the exit.";
+        else if (!dungeonCombat.CanWarriorMove)
+            diceText.text = "Combat ended movement for this turn.";
+        else
+            diceText.text = "Movement points left: " + remainingMoves;
+    }
+
     // -------------------- Dice: Agility x D6 --------------------
 
     public void RollDice()
     {
-        if (gameOver || currentPhase != TurnPhase.HeroTurn || hasRolled || isRolling || isAnimatingMove)
+        if (gameOver || currentPhase != TurnPhase.HeroTurn || hasRolled || isRolling || isAnimatingMove ||
+            (dungeonCombat != null && !dungeonCombat.CanWarriorMove))
             return;
 
+        dungeonHud?.BeginCombatRound();
         hasRolled = true; // Set immediately to prevent repeated button presses.
         isRolling = true;
         remainingMoves = 0;
@@ -346,14 +425,14 @@ public class GameManager : MonoBehaviour
         RefreshMoveHighlights();
 
         if (diceText != null)
-            diceText.text = "Rolling " + Mathf.Max(1, agility) + "D6...";
+            diceText.text = "Rolling " + MovementAgility + "D6...";
 
         StartCoroutine(AnimateDiceRoll());
     }
 
     private IEnumerator AnimateDiceRoll()
     {
-        int diceCount = Mathf.Max(1, agility);
+        int diceCount = MovementAgility;
         int[] results = new int[diceCount];
         int total = 0;
 
@@ -376,7 +455,11 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (hasValidFaces && diceImage != null)
+        if (dungeonHud != null)
+        {
+            yield return dungeonHud.AnimateMovement(results, diceAnimationDuration);
+        }
+        else if (hasValidFaces && diceImage != null)
         {
             // Animate the first die. If a second image is assigned, animate the second die at the same time.
             Coroutine firstAnimation = StartCoroutine(AnimateSingleDie(diceImage, results[0]));
@@ -441,7 +524,8 @@ public class GameManager : MonoBehaviour
 
     public void EndTurn()
     {
-        if (gameOver || currentPhase != TurnPhase.HeroTurn || isRolling || isAnimatingMove)
+        if (gameOver || currentPhase != TurnPhase.HeroTurn || isRolling || isAnimatingMove ||
+            (dungeonCombat != null && dungeonCombat.IsCombatFinished))
             return;
 
         // End Turn is allowed even if the Warrior has no legal move or unused points remain.
@@ -457,7 +541,20 @@ public class GameManager : MonoBehaviour
         if (diceText != null)
             diceText.text = "Warrior turn ended.";
 
-        if (onMonsterTurnStarted != null && onMonsterTurnStarted.GetPersistentEventCount() > 0)
+        if (dungeonCombat != null)
+        {
+            dungeonCombat.EndWarriorTurn();
+            if (dungeonCombat.IsCombatFinished)
+            {
+                currentPhase = TurnPhase.GameOver;
+                UpdateUI();
+            }
+            else
+            {
+                CompleteMonsterTurn();
+            }
+        }
+        else if (onMonsterTurnStarted != null && onMonsterTurnStarted.GetPersistentEventCount() > 0)
         {
             onMonsterTurnStarted.Invoke();
         }
@@ -501,7 +598,8 @@ public class GameManager : MonoBehaviour
         currentPhase = TurnPhase.HeroTurn;
         hasRolled = false;
         remainingMoves = 0;
-        SpawnPendingBonusItems();
+        if (dungeonCombat == null)
+            SpawnPendingBonusItems();
 
         if (diceText != null)
             diceText.text = "Warrior turn - roll the dice.";
@@ -722,6 +820,12 @@ public class GameManager : MonoBehaviour
     {
         bool heroCanRoll = !gameOver && currentPhase == TurnPhase.HeroTurn && !hasRolled && !isRolling && !isAnimatingMove;
         bool heroCanEndTurn = !gameOver && currentPhase == TurnPhase.HeroTurn && !isRolling && !isAnimatingMove;
+
+        if (dungeonCombat != null)
+        {
+            heroCanRoll &= dungeonCombat.CanWarriorMove;
+            heroCanEndTurn &= !dungeonCombat.IsCombatFinished;
+        }
 
         if (rollButton != null) rollButton.interactable = heroCanRoll;
         if (endTurnButton != null) endTurnButton.interactable = heroCanEndTurn;
